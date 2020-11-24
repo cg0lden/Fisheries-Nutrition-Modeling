@@ -190,8 +190,20 @@ SAU = SAU %>%
 
 ###Species disaggregation - Capture fisheries
 ##Option 1 - use food balance sheets and group averages
+##Steps
+#1) Calculate proportion of capture vs aquaculture in each category
+#2) Remove predicted aquaculture production in each group (assuming all products are exported  in the same proportion) 
+#3) Calculate group proportions of total consumption
+#4) Apply these proportions to estimated consumption 
+#5) Multiply by the average nutrient composition of each group
 
-##First calculate proportion of consumption within each group and year
+##Considerations
+#Hard to figure out how much is exported of capture vs aquaculture in each category. 
+#It might be that all the aquaculture production is being exported
+#Only problematic for categories with capture and aquaculture production
+
+
+##Calculate proportion of consumption within each group and year
 prop_genus_cat = FAO_commod %>% 
   filter(element == "Total food supply",
          year>2009) %>% 
@@ -226,9 +238,24 @@ prop_genus_cat_source = left_join(prop_genus_cat_source, total_genus_cat_source,
 prop_genus_cat_source = prop_genus_cat_source %>% 
   mutate(prop = tonnes/tonnes_total)
 
+##Option 2 - use a mix of food balance sheets and FAO/SAU production data
+##Steps
+#1) Calculate proportion of species within each category
+#2) Remove net exports (exports - imports) based food balance sheets and species proportions  
+#3) Apply these proportions to estimated consumption 
+#4) Multiply by the average nutrient composition of each group
+
+##Considerations
+#
 
 
-##Option 2 - use a mix of food balance sheets and FAO production data
+##Option 3 - use species value
+##Steps
+#1) Calculate fish price quantiles for each country and year
+#2) Assume that a certain proportion of species are being eported based on their value (high value species going to wealthy countries)
+#3) Estimate production retained domestically
+#4) Apply these proportions to estimated consumption 
+#5) Multiply by the average nutrient composition of each group
 
-##Option 3 - use SAU data
+
 
