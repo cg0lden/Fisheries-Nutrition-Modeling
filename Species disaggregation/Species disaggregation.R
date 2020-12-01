@@ -49,7 +49,7 @@ plot_countries = function(iso){
 ## "MEX" "MYS" "NEO" "NGA" "NOR" "NZL" "OCE" "PAK" "PER"
 ## "PHL" "PRY" "RUS" "SAC" "SAU" "THA" "TUR" "UKR" "USA"
 ## "VNM" "ZAF"
-plot_countries(iso="BRA")
+plot_countries(iso="OCE")
 
 ##Plot total
 fo_total = fo_marine_totals %>% 
@@ -64,7 +64,7 @@ ggplot(data = fo_total)+
 ##########Import Aquaculture data####################
 
 ##Read and clean FAO production data
-FAO_prod = read_csv("C:/Users/Daniel/Google Drive/MPAs and Human Nutrition/Data/FAO/FAO_global_production.csv")
+FAO_prod = read_csv("~/Google Drive/MPAs and Human Nutrition/Data/FAO/FAO_global_production.csv")
 
 FAO_prod = reshape2::melt(FAO_prod, id.vars = names(FAO_prod)[1:19], 
                           measure.vars = names(FAO_prod)[20:ncol(FAO_prod)])
@@ -106,7 +106,7 @@ FAO_prod$year = as.character(FAO_prod$year)
 FAO_prod$year = as.numeric(FAO_prod$year)
 
 ##Read and clean FAO food balance import/export data
-FAO_commod = read_csv("C:/Users/Daniel/Google Drive/MPAs and Human Nutrition/Data/FAO/food_balance_FAO.csv")
+FAO_commod = read_csv("~/Google Drive/MPAs and Human Nutrition/Data/FAO/food_balance_FAO.csv")
 
 FAO_commod = reshape2::melt(FAO_commod, id.vars = names(FAO_commod)[1:5], 
                             measure.vars = names(FAO_commod)[6:ncol(FAO_commod)])
@@ -146,7 +146,7 @@ FAO_commod$year = as.numeric(FAO_commod$year)
 
 ###SAU data
 ##Read SAU data
-SAU = read_csv("C:/Users/Daniel/Google Drive/MPAs and Human Nutrition/Data/SAU data/complete data/SAU raw database by EEZ 2010_2014.csv")
+SAU = read_csv("~/Google Drive/MPAs and Human Nutrition/Data/SAU data/complete data/SAU raw database by EEZ 2010_2014.csv")
 
 SAU = SAU %>%
   mutate(genus_cat = case_when(
@@ -189,6 +189,7 @@ SAU = SAU %>%
     functional_group=="Jellyfish" ~ "Aquatic Animals; Others"))
 
 ###Species disaggregation - Capture fisheries
+
 ##Option 1 - use food balance sheets and group averages
 ##Steps
 #1) Calculate proportion of capture vs aquaculture in each category
@@ -257,5 +258,5 @@ prop_genus_cat_source = prop_genus_cat_source %>%
 #4) Apply these proportions to estimated consumption 
 #5) Multiply by the average nutrient composition of each group
 
-
+##
 
