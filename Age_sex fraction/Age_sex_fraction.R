@@ -83,20 +83,23 @@ for(n in 1:length(countries)){
   }
 }
 
-#write.csv(age_sex_fraction, "age_sex_fraction_average_male_female.csv", row.names = F)
+#write.csv(age_sex_fraction, "data/age_sex_fraction_average_male_female.csv", row.names = F)
 
 ##Read model output data
-NutrientsScen <- read_csv("Age_sex fraction/NutrientsScen.csv")
+BaseNutrients <- read_csv("data/BaseNutrients.csv") %>% 
+  mutate(scenario = "base")
+ScenarioNutrients <- read_csv("data/ScenarioNutrients.csv") %>% 
+  mutate(scenario = "high")
 
-##Change to long format
-NutrientsScen_long = reshape2::melt(NutrientsScen, id.vars=c("OUTPUT", "Comment", "Location", "Type"))
+Base_high_nutrients = rbind (BaseNutrients, ScenarioNutrients)
 
-##Seperate information
-NutrientsScen_long = NutrientsScen_long %>% 
-  separate(OUTPUT, c("iso3c", "food", "units1"), "_",remove=T) %>% 
-  separate(units1, c("units", "nutrient", "total", "scenario"), "\\..",remove=T) %>% 
-  mutate(total = recode(total, "Scen" = "AVE"),
-         scenario = "Scen",
+Base_high_nutrients = Base_high_nutrients %>% 
+  rename("output" = "X1",
+         "iso3c" = "X6",
+         "food_abrev" = "X8") %>% 
+  separate(X10, c("X11", "nutrient", "total"), "\\..",remove=T) %>%
+  separate(elements, c("nutrient_long", "units", "X12"), "\\[", remove=F) %>% 
+  mutate(units = gsub("]", "", units),
          nutrient = recode(nutrient,
                            "CA" = "Calcium",
                            "FE" = "Iron",
@@ -108,12 +111,22 @@ NutrientsScen_long = NutrientsScen_long %>%
                            "VitA1" = "Vitamin A",
                            "VitB" = "Vitamin B6",
                            "ZN" = "Zinc",
-                           "PROT" = "Protein")) %>% 
-  rename("year" = "variable")
+                           "PROT" = "Protein",
+                           "DES" = "Calories")) %>% 
+  select(-X12, -X11)
+  
+
+##Change to long format
+NutrientsScen_long = reshape2::melt(Base_high_nutrients, id.vars=c("output", "countries", "products", "elements",     
+                                                                   "nutrient_long", "units", "country_codes", "iso3c",        
+                                                                   "product_codes", "food_abrev", "ele_codes", "nutrient",     
+                                                                   "total", "scenario")) %>% 
+  rename("year" = "variable") %>% 
+  mutate(year = gsub("_", "", year))
 
 ##Now join databases
 age_sex_fraction_clean = age_sex_fraction %>% 
-  select(iso3_use, nutrient, age_range, fraction_med) %>% 
+  select(iso3_use, nutrient, age_range, sex, fraction_med) %>% 
   drop_na(fraction_med)
 
 NutrientsScen_long = left_join(NutrientsScen_long, age_sex_fraction_clean, by=c("iso3c"="iso3_use", "nutrient"="nutrient"))
@@ -121,8 +134,13 @@ NutrientsScen_long = left_join(NutrientsScen_long, age_sex_fraction_clean, by=c(
 NutrientsScen_long = NutrientsScen_long %>% 
   mutate(pred_value = fraction_med*value)
 
-#write.csv(NutrientsScen_long, "NutrientsScen_age_sex.csv", row.names = F)
+#write.csv(NutrientsScen_long, "data/NutrientsScen_age_sex.csv", row.names = F)
 
+##Kenia example
+kenia = NutrientsScen_long %>% 
+  filter(iso3c == "KEN")
+
+write.csv(kenia, "data/NutrientsScen_age_sex_kenia.csv", row.names = F)
 
 ###Find missing countries
 
