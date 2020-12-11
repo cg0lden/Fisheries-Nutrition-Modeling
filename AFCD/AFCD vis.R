@@ -448,6 +448,90 @@ plot.single(nut="Iron")
 
 
 
+
+
+# ########
+# AF = rnorm(5000, mean=10, sd=5)
+# AF = AF[AF>0]
+# AF = as.data.frame(AF)
+# AF$ASF = "Aquatic Foods"
+# AF$source = "Available"
+# colnames(AF) = c("value", "ASF", "source")
+# 
+# RM = rnorm(100, mean=10, sd=0.5)
+# RM = RM[RM>0]
+# RM = as.data.frame(RM)
+# RM$ASF = "Red Meat"
+# RM$source = "Available"
+# colnames(RM) = c("value", "ASF", "source")
+# 
+# PO = rnorm(30, mean=12, sd=0.3)
+# PO = PO[PO>0]
+# PO = as.data.frame(PO)
+# PO$ASF = "Poultry"
+# PO$source = "Available"
+# colnames(PO) = c("value", "ASF", "source")
+# 
+# dat = rbind(AF, RM, PO)
+# 
+# AF = rnorm(1000, mean=10, sd=2)
+# AF = AF[AF>0]
+# AF = as.data.frame(AF)
+# AF$ASF = "Aquatic Foods"
+# AF$source = "Consumed"
+# colnames(AF) = c("value", "ASF", "source")
+# 
+# RM = rnorm(10, mean=10, sd=0.1)
+# RM = RM[RM>0]
+# RM = as.data.frame(RM)
+# RM$ASF = "Red Meat"
+# RM$source = "Consumed"
+# colnames(RM) = c("value", "ASF", "source")
+# 
+# PO = rnorm(5, mean=12, sd=0.1)
+# PO = PO[PO>0]
+# PO = as.data.frame(PO)
+# PO$ASF = "Poultry"
+# PO$source = "Consumed"
+# colnames(PO) = c("value", "ASF", "source")
+# 
+# dat = rbind(dat, AF, RM, PO)
+# 
+# AF = rnorm(1000, mean=10, sd=1)
+# AF = AF[AF>0]
+# AF = as.data.frame(AF)
+# AF$ASF = "Aquatic Plants"
+# AF$source = "Consumed"
+# colnames(AF) = c("value", "ASF", "source")
+# 
+# RM = rnorm(1000, mean=20, sd=3)
+# RM = RM[RM>0]
+# RM = as.data.frame(RM)
+# RM$ASF = "etc"
+# RM$source = "Consumed"
+# colnames(RM) = c("value", "ASF", "source")
+# 
+# PO = rnorm(1000, mean=15, sd=10)
+# PO = PO[PO>0]
+# PO = as.data.frame(PO)
+# PO$ASF = "Crustaceans"
+# PO$source = "Consumed"
+# colnames(PO) = c("value", "ASF", "source")
+# dat2 = rbind(AF, RM, PO)
+# 
+# 
+# p1 = ggplot(data = dat)+
+#   geom_point(aes(x=ASF, y=value))+
+#   facet_wrap(~source, dir="v")+
+#   theme_classic()+
+#   ylab("Nutrient A")
+# 
+# p2 = ggplot(data=dat2)+
+#   geom_point(aes(x=ASF, y=value))+
+#   theme_classic()+
+#   ylab("Nutrient A")
+# 
+
 #################################
 #Other calculations
 
