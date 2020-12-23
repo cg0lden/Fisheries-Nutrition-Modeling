@@ -7,10 +7,10 @@ QPMARBASE <- read_csv("data/QPMARBASE.csv") %>% mutate(scenario = "base", env = 
 QPMARHIGH <- read_csv("data/QPMARHIGH.csv") %>% mutate(scenario = "high", env = "MAR")
 QPINLHIGH <- read_csv("data/QPINLHIGH.csv") %>% mutate(scenario = "high", env = "INL")
 QPINLBASE <- read_csv("data/QPINLBASE.csv") %>% mutate(scenario = "base", env = "INL")
-FoodConsumptionBase <- read_csv("data/FoodConsumptionBase.csv") %>% mutate(scenario = "base")
-FoodConsumptionScenario <- read_csv("data/FoodConsumptionScenario.csv") %>% mutate(scenario = "high")
-BaseNutrients <- read_csv("data/BaseNutrients.csv") %>% mutate(scenario = "base")
-ScenarioNutrients <- read_csv("data/ScenarioNutrients.csv") %>% mutate(scenario = "high")
+FoodConsumptionBase <- read_csv("data/FoodConsBaseRev2.csv") %>% mutate(scenario = "base")
+FoodConsumptionScenario <- read_csv("data/FoodConsScenRev2.csv") %>% mutate(scenario = "high")
+BaseNutrients <- read_csv("data/NutrientsBaseRev2.csv") %>% mutate(scenario = "base")
+ScenarioNutrients <- read_csv("data/NutrientsScenRev2.csv") %>% mutate(scenario = "high")
 fw_consump_combined_final <- read_csv("data/fw_consump_combined_final_wmodelcode.csv")
 MAR_spp_proportions_2010_2014_SAU <- read_csv("data/MAR_spp_proportions_2014_SAU.csv")
 iso_group <- read_csv("data/iso_group.csv") %>% filter(!group=="EUN")
@@ -32,6 +32,7 @@ mar_fw_spp_nutrients_broad_categories <- read_csv("data/mar_fw_spp_nutrients.csv
   dplyr::select(common_name, nutrient, broad_category, value) %>% 
   group_by(broad_category, nutrient) %>% 
   summarise(value_cat = mean(value)) %>% 
+  ungroup() %>% 
   drop_na(broad_category) %>% 
   mutate(broad_category = recode(broad_category, 
                                  "freshwater" = "INL",
@@ -71,11 +72,13 @@ QP_countries = as.data.frame(unique(QP_all$iso3c))
 ##Calculate proportions of each group/country
 QP_all_total = QP_all %>%
   group_by(iso3c, year, scenario) %>% 
-  summarise(value_total = sum(value))
+  summarise(value_total = sum(value)) %>% 
+  ungroup()
 
 QP_prop = QP_all %>%  
   group_by(iso3c, year, group, scenario, env) %>% 
-  summarise(value = sum(value))
+  summarise(value = sum(value)) %>% 
+  ungroup()
 
 QP_prop = left_join(QP_prop, QP_all_total, by=c("iso3c", "year", "scenario")) 
 
@@ -97,10 +100,11 @@ QP_prop = QP_prop %>%
 Base_high_nutrients = rbind (BaseNutrients, ScenarioNutrients)
 
 Base_high_nutrients = Base_high_nutrients %>% 
-  rename("output" = "X1",
-         "iso3c" = "X6",
-         "food_abrev" = "X8") %>% 
-  separate(X10, c("X11", "nutrient", "total"), "\\..",remove=T) %>%
+  rename("output" = "OUTPUT,0",
+         "iso3c" = "X2",
+         "food_abrev" = "X3",
+         "nutrient" = "X4") %>% 
+  #separate(X10, c("X11", "nutrient", "total"), "\\..",remove=T) %>%
   separate(elements, c("nutrient_long", "units", "X12"), "\\[", remove=F) %>% 
   mutate(units = gsub("]", "", units),
          nutrient = recode(nutrient,
@@ -116,16 +120,15 @@ Base_high_nutrients = Base_high_nutrients %>%
                            "ZN" = "Zinc",
                            "PROT" = "Protein",
                            "DES" = "Calories")) %>% 
-  select(-X12, -X11)
+  select(-X12)
 
 
 ##Change to long format
 NutrientsScen_long = reshape2::melt(Base_high_nutrients, id.vars=c("output", "countries", "products", "elements",     
-                                                                   "nutrient_long", "units", "country_codes", "iso3c",        
-                                                                   "product_codes", "food_abrev","ele_codes",
-                                                                   "nutrient", "total", "scenario")) %>% 
+                                                                   "nutrient_long", "units", "iso3c",        
+                                                                   "food_abrev", "nutrient", "scenario")) %>% 
   rename("year" = "variable") %>% 
-  mutate(year = gsub("_", "", year)) %>% 
+  mutate(year = gsub("A", "", year)) %>% 
   filter(nutrient %in% c("Iron", "Zinc", "Protein", "Vitamin A", "Vitamin B12", "Omega-3 fatty acids", "Calcium"))
 
 ##Calculate proportion of aquatic foods for each country in 2017
@@ -149,25 +152,24 @@ NutrientsScen_long_all = left_join(NutrientsScen_long_terrestrial, NutrientsScen
          prop_terrestrial = total_terrestrial/total,
          prop_aquatic = total_aquatic/total)
 
-write.csv(NutrientsScen_long_all, "seafood_nutrient_supply_GND.csv", row.names = F)
+#write.csv(NutrientsScen_long_all, "seafood_nutrient_supply_GND.csv", row.names = F)
 
 ##Food Consumption
 FC_all = rbind(FoodConsumptionBase, FoodConsumptionScenario) %>%
-  rename("output" = "X1",
-         "iso3c" = "X6",
-         "food_abrev" = "X8") %>%
-  separate(X10, c("X11", "nutrient", "total"), "\\..",remove=T) %>%
+  rename("output" = "OUTPUT,0",
+         "iso3c" = "X5",
+         "food_abrev" = "X6") %>%
+  #separate(X10, c("X11", "nutrient", "total"), "\\..",remove=T) %>%
   separate(elements, c("nutrient_long", "units", "X12"), "\\[", remove=F) %>%
   mutate(units = gsub("]", "", units)) %>% 
-  select(-X12, -X11)
+  select(-X12, -X7)
 
 ##Change to long format
 FC_all = reshape2::melt(FC_all, id.vars=c("output", "countries", "products", "elements",
-                                          "nutrient_long", "units", "country_codes", "iso3c",
-                                          "product_codes", "food_abrev", "ele_codes", "nutrient", 
-                                          "total", "scenario")) %>%
+                                          "nutrient_long", "units", "iso3c",
+                                          "food_abrev","scenario")) %>%
 rename("year" = "variable") %>%
-mutate(year = gsub("_", "", year))
+mutate(year = gsub("A", "", year))
 
 FC_ASF = FC_all %>% 
   filter(products %in% c("Beef and Veal", "Fish", "Pork", "Poultry", "Sheep"))
