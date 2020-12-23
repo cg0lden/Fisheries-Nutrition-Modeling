@@ -4,8 +4,8 @@ library(rfishbase)
 library(fuzzyjoin)
 
 ##load data
-fw_consump_combined_final <- read_csv("data/fw_consump_combined_final.csv")
-MAR_spp_proportions_2010_2014_SAU <- read_csv("data/MAR_spp_proportions_2010_2014_SAU.csv")
+fw_consump_combined_final <- read_csv("data/fw_consump_combined_final_wmodelcode.csv")
+MAR_spp_proportions_2010_2014_SAU <- read_csv("data/MAR_spp_proportions_2014_SAU.csv")
 
 ##Read SAU data
 SAU = read_csv("C:/Users/Daniel/Google Drive/MPAs and Human Nutrition/Data/SAU data/complete data/SAU raw database by EEZ 2010_2014.csv")
@@ -51,7 +51,8 @@ AFCD_long = AFCD_long %>%
                          "vitA",
                          "Vitamin.B12",
                          "Fatty.acids.total.n3.polyunsaturated",
-                         "Protein")) %>% 
+                         "Protein", 
+                         "Calcium")) %>% 
   mutate(variable = recode(variable, 
                            "Edible.portion.coefficient" = "edible",
                            "Iron.total" = "Iron", 
@@ -62,7 +63,6 @@ AFCD_long = AFCD_long %>%
 AFCD_long$value = as.numeric(AFCD_long$value) 
 AFCD_long$variable = as.character(AFCD_long$variable)
 
-
 ##Get unique species
 fw_spp = fw_consump_combined_final %>% 
   rename("iso3c" = "country_code",
@@ -70,10 +70,12 @@ fw_spp = fw_consump_combined_final %>%
          "production_sector" = "source",
          "tonnes" = "consumption_tons_mid",
          "scientific_name" = "sci_name") %>% 
-  dplyr::select(common_name, scientific_name, family, order)%>% 
+  mutate(category = if_else(is.na(model_code), "freshwater", model_code)) %>% 
+  dplyr::select(common_name, scientific_name, family, order, category)%>% 
   distinct(common_name, scientific_name, .keep_all = TRUE) %>% 
   separate(scientific_name, c("genus", "spp"), " ", remove=FALSE) %>% 
-  mutate(category = "freshwater")
+  mutate(broad_category = "freshwater")
+
 
 mar_spp = MAR_spp_proportions_2010_2014_SAU %>% 
   select(common_name) %>% 
@@ -86,14 +88,43 @@ mar_spp_SAU = SAU %>%
 
 mar_spp_SAU = left_join(mar_spp_SAU, taxa_table, by=c("genus" = "Genus")) %>% 
   rename("family" = "Family",
-         "order" = "Order",
-         "category" = "functional_group")
+         "order" = "Order") %>% 
+  select(-functional_group)
 
-mar_spp = left_join(mar_spp, mar_spp_SAU, by="common_name")
+fao_prod_taxa_classification_20201216 <- read_csv("data/fao_prod_taxa_classification_20201216.csv") %>% 
+  rename("scientific_name" = "SciName",
+         "common_name" = "CommonName",
+         "genus" = "Genus",
+         "family" = "Family",
+         "order" = "Order") %>% 
+  mutate(spp="NA") %>% 
+  select(common_name, scientific_name, genus, spp, family, order)
+
+all_spp_mar = rbind(mar_spp_SAU, fao_prod_taxa_classification_20201216) %>% 
+  distinct(common_name, .keep_all = TRUE)
+  
+mar_spp = left_join(mar_spp, all_spp_mar, by="common_name") %>% 
+  mutate(broad_category = "marine")
+
+all_spp_categories <- read_csv("data/all_spp_categories.csv")
+
+mar_spp = left_join(mar_spp, all_spp_categories, by="scientific_name") %>% 
+  rename("category" = "genus_cat")
 
 all_spp = rbind(mar_spp, fw_spp) %>% 
-  distinct(common_name, .keep_all = TRUE) 
-  
+  distinct(common_name, scientific_name, .keep_all = TRUE) 
+
+##Insert Species groups
+QP_groups <- read_csv("data/QP_groups.csv") %>% 
+  mutate(scientific_name = "NA",
+         genus = "NA",
+         spp="NA",
+         family = "NA",
+         order = "NA",
+         broad_category = "freshwater")
+
+all_spp = rbind(all_spp, QP_groups)
+
 all_spp = all_spp %>%
   mutate(Iron = "Iron",
          Zinc = "Zinc",
@@ -101,14 +132,19 @@ all_spp = all_spp %>%
          "Vitamin B12" = "Vitamin B-12",
          "Omega-3 fatty acids" = "Omega-3 fatty acids",
          Protein = "Protein",
-         edible = "edible")
+         Calcium = "Calcium")
 
-all_spp = reshape2::melt(all_spp, id.vars = c("scientific_name", "common_name", "genus", "spp", "category", "family", "order"),
+all_spp = reshape2::melt(all_spp, id.vars = c("scientific_name", "common_name", "genus", "spp", "category", "family", "order", "broad_category"),
                             measure.vars = c("Iron", "Zinc", "Protein", "Vitamin A", "Vitamin B12",
-                                             "Omega-3 fatty acids", "edible"))
+                                             "Omega-3 fatty acids", "Calcium"))
 all_spp = all_spp %>%
   rename(nutrient = variable) %>%
-  select(-value)
+  select(-value) %>% 
+  mutate(scientific_name = tolower(scientific_name),
+         common_name = tolower(common_name),
+         genus = tolower(genus),
+         family = tolower(family),
+         order = tolower(order))
 
 #write.csv(all_spp, "fw_mar_spp.csv", row.names = FALSE)
 ######calculate average for species scientific names, genus and family#####################
@@ -116,22 +152,27 @@ all_spp = all_spp %>%
 #calculate mean values for species
 afcd_spp = AFCD_long %>%
   group_by(species, variable) %>% 
-  summarize(value = mean(value))
+  summarize(value = mean(value)) %>% 
+  drop_na(species) %>% 
+  mutate(species = tolower(species))
 
 #calculate mean values for genus
 afcd_genus = AFCD_long %>%
   group_by(genus, variable) %>% 
-  summarize(value = mean(value))
+  summarize(value = mean(value)) %>% 
+  drop_na(genus)
 
 #calculate mean values for family
 afcd_family = AFCD_long %>%
   group_by(family, variable) %>% 
-  summarize(value = mean(value))
+  summarize(value = mean(value)) %>% 
+  drop_na(family)
 
 #calculate mean values for order
 afcd_order = AFCD_long %>%
   group_by(order, variable) %>% 
-  summarize(value = mean(value))
+  summarize(value = mean(value)) %>% 
+  drop_na(order)
 
 #calculate mean values for common_name
 #calculate mean values for order
@@ -178,7 +219,7 @@ sau_nutrition = left_join(all_spp, afcd_spp, by=c("scientific_name" = "species",
 
 sau_nutrition$value[sau_nutrition$value_md_fill==0]=NA
 
-#find NAs and remove lobsters and crabs
+#find NAs
 missing = sau_nutrition %>% 
   filter(is.na(value)) %>% 
   select(-value)
@@ -249,7 +290,7 @@ missing = missing %>%
 #Join datasets
 afcd_comm_name$variable = as.character(afcd_comm_name$variable)
 missing = regex_left_join(missing, afcd_comm_name, by=c("common_name" = "Food.name.in.English", "nutrient"="variable")) %>% 
-  group_by(scientific_name, common_name, genus, spp, category, family, order, nutrient) %>% 
+  group_by(scientific_name, common_name, genus, spp, category, broad_category, family, order, nutrient) %>% 
   summarise(value = mean(value)) %>% 
   ungroup()
 
@@ -299,8 +340,25 @@ missing = missing %>%
   filter(is.na(value)) %>% 
   dplyr::select(-value)
 
-sau_nutrition = sau_nutrition %>% 
-  filter(!nutrient=="edible")
+########################## Fill missing data by broad category #############################
+
+######calculate mean values for each category from compiled data
+unique_cat = sau_nutrition %>% 
+  group_by(broad_category, nutrient) %>% 
+  summarize(value = mean(value))
+
+#Join datasets
+missing = left_join(missing, unique_cat, by=c("broad_category", "nutrient"))
+missing_bcat = missing %>% 
+  filter(!is.na(value)) 
+
+##include filled values
+sau_nutrition = rbind(sau_nutrition, missing_bcat)
+
+##Seperate remaining missing values
+missing = missing %>% 
+  filter(is.na(value)) %>% 
+  dplyr::select(-value)
 
 write.csv(sau_nutrition, "data/mar_fw_spp_nutrients.csv", row.names = F)
 

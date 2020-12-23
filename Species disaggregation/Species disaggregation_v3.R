@@ -3,64 +3,6 @@
 library(readr)
 library(tidyverse)
 
-##############Clean FAO data
-##########Aquaculture data####################
-
-##Read and clean FAO production data
-FAO_prod = read_csv("C:/Users/Daniel/Google Drive/MPAs and Human Nutrition/Data/FAO/FAO_global_production.csv")
-
-FAO_prod = reshape2::melt(FAO_prod, id.vars = names(FAO_prod)[1:19], 
-                          measure.vars = names(FAO_prod)[20:ncol(FAO_prod)])
-
-FAO_prod = FAO_prod %>% 
-  rename(year = variable, tonnes = value) %>% 
-  drop_na(tonnes) %>% 
-  filter(!FAOSTAT_group_of_commodities %in% c("Aquatic Mammals"))
-
-##Create Genus category
-FAO_prod = FAO_prod %>%
-  mutate(genus_cat = case_when(#Cephalopods
-    FAOSTAT_group_of_commodities=="Cephalopods" ~ "Cephalopods",
-    #Demersal fish
-    FAOSTAT_group_of_commodities=="Demersal Marine Fish" ~ "Demersal Fish",
-    #Pelagic fish
-    FAOSTAT_group_of_commodities=="Pelagic Marine Fish" ~ "Pelagic Fish",
-    #Crustaceans
-    FAOSTAT_group_of_commodities=="Crustaceans" ~ "Crustaceans",
-    #Marine Fish; Other
-    FAOSTAT_group_of_commodities=="Marine Fish NEI" ~ "Marine Fish; Other",
-    #Moluscs; Other
-    FAOSTAT_group_of_commodities=="Molluscs excl. Cephalopods" ~ "Moluscs; Other",
-    #Freshwater
-    FAOSTAT_group_of_commodities=="Freshwater and Diadromous Fish" ~ "Freshwater Fish",
-    #Aquatic Plants
-    FAOSTAT_group_of_commodities=="Aquatic Plants" ~ "Aquatic Plants",
-    #Other aquatic animals (Aquatic Animals; Others)
-    FAOSTAT_group_of_commodities=="Aquatic Animals NEI" ~ "Aquatic Animals; Others"))
-
-##Seperate Salmon
-Salmon_aquac =  FAO_prod %>% 
-  filter(Production_source=="Aquaculture production",
-         str_detect(ASFIS_species, fixed('salmon', ignore_case=TRUE)),
-         Production_area=="Marine areas",
-         year %in% c("2010", "2011", "2012", "2013", "2014"))
-  
-
-##Remove freshwater species
-FAO_prod = FAO_prod %>% 
-  filter(!genus_cat %in% c("Freshwater Fish", "Aquatic Plants", "Aquatic Animals; Others"),
-         !ISSCAAP_group %in% c("Pearls, mother-of-pearl, shells",
-                               "Freshwater crustaceans",
-                               "Freshwater molluscs"))
-
-FAO_prod$year = as.character(FAO_prod$year)
-FAO_prod$year = as.numeric(FAO_prod$year)
-
-FAO_prod = FAO_prod %>% 
-  filter(year>2009)
-
-FAO_aquac = FAO_prod %>% 
-  filter(Production_source=="Aquaculture production")
 
 ##Read and clean FAO food balance import/export data
 
@@ -76,278 +18,203 @@ FAO_commod = FAO_commod %>%
   rename(year = variable, tonnes = value, species_group = FAOSTAT_group) %>% 
   drop_na(tonnes)
 
-##Create Genus category
-FAO_commod = FAO_commod %>%
-  mutate(genus_cat = case_when(#Cephalopods
-    species_group=="Cephalopods" ~ "Cephalopods",
-    #Demersal fish
-    species_group=="Demersal fish" ~ "Demersal Fish",
-    #Pelagic fish
-    species_group=="Pelagic fish" ~ "Pelagic Fish",
-    #Crustaceans
-    species_group=="Crustaceans" ~ "Crustaceans",
-    #Marine Fish; Other
-    species_group=="Marine fish nei" ~ "Marine Fish; Other",
-    #Moluscs; Other
-    species_group=="Molluscs excl. cephalopods" ~ "Moluscs; Other",
-    #Freshwater
-    species_group=="Freshwater & diadromous fish" ~ "Freshwater Fish",
-    #Other aquatic animals (Aquatic Animals; Others)
-    species_group=="Aquatic animals nei" ~ "Aquatic Animals; Others"))
-
-FAO_commod = FAO_commod %>% 
-  filter(!genus_cat %in% c("Freshwater Fish"))
-
 FAO_commod$year = as.character(FAO_commod$year)
 FAO_commod$year = as.numeric(FAO_commod$year)
 
 FAO_commod = FAO_commod %>% 
-  filter(year>2009)
+  filter(year==2014)
 
 FAO_export = FAO_commod %>% filter(Element=="Food exports")
 FAO_import = FAO_commod %>% filter(Element=="Food imports")
 
+FB_export = FAO_export %>% 
+  group_by(iso3c) %>%
+  summarise(tonnes_FB = sum(tonnes))
 
-##Read FAO import/export data
-FAO_trade = read_csv("C:/Users/Daniel/Google Drive/MPAs and Human Nutrition/Data/FAO/FAO_commodities_quantity.csv")
+FB_import = FAO_import %>% 
+  group_by(iso3c) %>%
+  summarise(tonnes_FB = sum(tonnes))
 
-FAO_trade = reshape2::melt(FAO_trade, id.vars = names(FAO_trade)[1:17], 
-                            measure.vars = names(FAO_trade)[18:ncol(FAO_trade)])
+##############Clean FAO data
+fao_prod_data_20201216 <- read_csv("data/fao_prod_data_20201216.csv")
 
-FAO_trade = FAO_trade %>% 
+fao_prod_2014 = fao_prod_data_20201216 %>% 
+  filter(year==2012,
+         inlandmarine_group=="Marine") %>% 
+  group_by(country_iso3_alpha, SciName) %>% 
+  summarise(tonnes = sum(quantity)) %>% 
+  ungroup() %>% 
+  filter(tonnes>0)
+
+
+##Read and clean FAO production data
+FAO_prod = read_csv("C:/Users/Daniel/Google Drive/MPAs and Human Nutrition/Data/FAO/FAO_global_production.csv")
+
+FAO_prod = reshape2::melt(FAO_prod, id.vars = names(FAO_prod)[1:19], 
+                          measure.vars = names(FAO_prod)[20:ncol(FAO_prod)])
+
+FAO_prod = FAO_prod %>% 
   rename(year = variable, tonnes = value) %>% 
-  drop_na(tonnes) %>%
-  mutate(genus_cat = case_when(#Cephalopods
-    FAOSTAT_group=="Cephalopods" ~ "Cephalopods",
-    #Demersal fish
-    FAOSTAT_group=="Demersal fish" ~ "Demersal Fish",
-    FAOSTAT_group=="Demersal" ~ "Demersal Fish",
-    FAOSTAT_group=="Demersal frozen" ~ "Demersal Fish",
-    #Pelagic fish
-    FAOSTAT_group=="Pelagic fish" ~ "Pelagic Fish",
-    FAOSTAT_group=="Pelagic" ~ "Pelagic Fish",
-    #Crustaceans
-    FAOSTAT_group=="Crustaceans" ~ "Crustaceans",
-    #Marine Fish; Other
-    FAOSTAT_group=="Marine fish nei" ~ "Marine Fish; Other",
-    #Moluscs; Other
-    FAOSTAT_group=="Molluscs excl. cephalopods" ~ "Moluscs; Other",
-    FAOSTAT_group=="Molluscs excl. ceph." ~ "Moluscs; Other",
-    #Freshwater
-    FAOSTAT_group=="Freshwater & diadromous fish" ~ "Freshwater Fish",
-    FAOSTAT_group=="Freshwater & diadromous" ~ "Freshwater Fish",
-    #Other aquatic animals (Aquatic Animals; Others)
-    FAOSTAT_group=="Aquatic animals nei" ~ "Aquatic Animals; Others"))
+  drop_na(tonnes) %>% 
+  filter(!FAOSTAT_group_of_commodities %in% c("Aquatic Mammals"),
+         Production_area == "Marine areas",
+         year==2014) %>% 
+  mutate(scientific_name = tolower(scientific_name))
 
-#Convert to live weight
-FAO_trade_fillets = FAO_trade %>% 
-  filter(str_detect(commodity, fixed('fillet', ignore_case=TRUE))) %>% 
-  mutate(tonnes = tonnes*2)
+FAO_prod$year = as.character(FAO_prod$year)
+FAO_prod$year = as.numeric(FAO_prod$year)
 
-FAO_trade_whole = FAO_trade %>% 
-  filter(!str_detect(commodity, fixed('fillet', ignore_case=TRUE)))
+FAO_prod_agg = FAO_prod %>% 
+  group_by(iso3c, scientific_name) %>% 
+  summarise(tonnes = sum(tonnes)) %>% 
+  ungroup()
+
+##Read and clean import/export data
+BFA_nutrition_species_trade <- read_csv("data/BFA_nutrition_species_trade.csv")
+
+##Exports
+BFA_exports = BFA_nutrition_species_trade %>% 
+  filter(flow=="exports") %>% 
+  select(-X1, -flow, -country_name) %>% 
+  rename("quantity" = "quantity_t_live_weight")
+
+BFA_exports_total = BFA_exports %>% 
+  group_by(iso3c) %>%
+  summarise(tonnes = sum(quantity))
+
+BFA_exports = BFA_exports %>% 
+  left_join(BFA_exports_total, by="iso3c") %>% 
+  left_join(FB_export, by="iso3c") %>% 
+  mutate(spp_prop = quantity/tonnes,
+         exports = spp_prop*tonnes_FB) %>% 
+  select(iso3c, species, exports)
+
+##Imports
+BFA_imports = BFA_nutrition_species_trade %>% 
+  filter(flow=="imports") %>% 
+  select(-X1, -flow, -country_name) %>% 
+  rename("quantity" = "quantity_t_live_weight")
+
+BFA_imports_total = BFA_imports %>% 
+  group_by(iso3c) %>%
+  summarise(tonnes = sum(quantity))
+
+BFA_imports = BFA_imports %>% 
+  left_join(BFA_imports_total, by="iso3c") %>% 
+  left_join(FB_import, by="iso3c") %>% 
+  mutate(spp_prop = quantity/tonnes,
+         imports = spp_prop*tonnes_FB) %>% 
+  select(iso3c, species, imports)
 
 
-FAO_trade = rbind(FAO_trade_fillets, FAO_trade_whole)
+##Match Production with exports
+FAO_prod_consump1 = left_join(FAO_prod_agg, BFA_exports, by=c("iso3c", "scientific_name" = "species")) %>% 
+  mutate(exports = if_else(is.na(exports), 0, exports), 
+         net_prod = tonnes - exports) %>% 
+  full_join(BFA_imports, by=c("iso3c", "scientific_name" = "species")) %>% 
+  arrange(net_prod)
 
-##Seperate salmon
-Salmon_import = FAO_trade %>%
-  filter(Trade_flow=="Imports",
-         year %in% c("2010", "2011", "2012", "2013", "2014"),
-         str_detect(commodity, fixed('salmon', ignore_case=TRUE)))
+FAO_prod_consump = left_join(fao_prod_2014, BFA_exports, by=c("country_iso3_alpha" = "iso3c", "SciName" = "species")) %>% 
+  mutate(exports = if_else(is.na(exports), 0, exports), 
+         net_prod = tonnes - exports) %>% 
+  full_join(BFA_imports, by=c("country_iso3_alpha" = "iso3c", "SciName" = "species")) %>% 
+  arrange(net_prod)
 
-Salmon_export = FAO_trade %>%
-  filter(Trade_flow=="Exports",
-         year %in% c("2010", "2011", "2012", "2013", "2014"),
-         str_detect(commodity, fixed('salmon', ignore_case=TRUE)))
+ggplot(data=FAO_prod_consump)+
+  geom_point(aes(x=country_iso3_alpha, y=net_prod))+
+  ylab("Net production (production - exports)")
 
-##Salmon-free imports
-FAO_trade_import = FAO_trade %>% 
-  filter(Trade_flow=="Imports",
-         year %in% c("2010", "2011", "2012", "2013", "2014"),
-         !ISSCAAP_division %in% c("Miscellaneous aquatic animals", "Freshwater fishes", "Aquatic plants", "Whales, seals and other aquatic mammals")) 
+#write.csv(FAO_prod_consump, "FAO_consumption_estimates_2012.csv", row.names = F)
+
+
+###########Food balance vs Jessica
+JG_export = BFA_exports %>% 
+  group_by(iso3c) %>%
+  summarise(tonnes = sum(exports))
   
-##Clean names
-FAO_trade_import = FAO_trade_import %>% 
-  separate(Harmonized_group, c("common_name_2", "name_2", "name_3", "name_4"), ",", remove=FALSE) 
+FB_export = FAO_export %>% 
+  group_by(iso3c) %>%
+  summarise(tonnes_FB = sum(tonnes))
 
-FAO_trade_import = FAO_trade_import %>% 
-  separate(common_name_2, c("common_name","scientific_name"), '\\(', remove=FALSE) 
+all_export = left_join(JG_export, FB_export, by="iso3c")
 
-FAO_trade_import$scientific_name<- gsub(")","",FAO_trade_import$scientific_name)
-FAO_trade_import$common_name<- gsub("Other ","",FAO_trade_import$common_name)
+ggplot(data = all_export) +
+  geom_point(aes(x=tonnes, y=tonnes_FB))+
+  geom_abline(intercept = 0, slope = 1) +
+  theme_classic()
 
-FAO_trade_import = FAO_trade_import %>% 
-  select(iso3c, commodity, genus_cat, common_name, scientific_name, year, tonnes)
-
-FAO_import_agg = FAO_trade_import %>% 
-  group_by(common_name, scientific_name , genus_cat, iso3c, year) %>% 
-  summarise(tonnes = sum(tonnes))
-
-##Calculate proportion of spp in each category, country and year
-#First calculate total in each category, country and year
-FAO_import_agg_total = FAO_import_agg %>% 
-  group_by(genus_cat, iso3c, year) %>% 
-  summarise(tonnes_total = sum(tonnes))
-
-##Merge files
-
-FAO_import_agg = left_join(FAO_import_agg, FAO_import_agg_total, by=c("genus_cat", "iso3c", "year"))
-
-FAO_import_agg = FAO_import_agg %>% 
-  mutate(spp_prop = tonnes/tonnes_total)
-
-FAO_import_final = FAO_import_agg %>% 
-  select(genus_cat, iso3c, year, common_name, scientific_name, spp_prop)
-
-FAO_import_final$year = as.character(FAO_import_final$year)
-  
 ##############################SAU data
-##Read SAU data
-SAU = read_csv("C:/Users/Daniel/Google Drive/MPAs and Human Nutrition/Data/SAU data/complete data/SAU raw database by EEZ 2010_2014.csv")
+# ##Read SAU data
+# SAU = read_csv("C:/Users/Daniel/Google Drive/MPAs and Human Nutrition/Data/SAU data/complete data/SAU raw database by EEZ 2014.csv")
+# 
+# country_code_SAU <- read_csv("Species disaggregation/countries_ISO.csv")
+# 
+# SAU = left_join(SAU, country_code_SAU, by=c("fishing_entity"="missing_countries"))
+# 
+# SAU = SAU %>%
+#   mutate(genus_cat = case_when(
+#     #Cephalopods
+#     functional_group=="Cephalopods" ~ "Cephalopods",
+#     #Demersal fish
+#     functional_group=="Small demersals (<30 cm)" ~ "Demersal Fish",
+#     functional_group=="Medium demersals (30 - 89 cm)" ~ "Demersal Fish",
+#     functional_group=="Large demersals (>=90 cm)" ~ "Demersal Fish", 
+#     functional_group=="Small bathydemersals (<30 cm)" ~ "Demersal Fish",
+#     functional_group=="Medium bathydemersals (30 - 89 cm)" ~ "Demersal Fish",
+#     functional_group=="Large bathydemersals (>=90 cm)" ~ "Demersal Fish",
+#     functional_group=="Small to medium flatfishes (<90 cm)" ~ "Demersal Fish",
+#     functional_group=="Large flatfishes (>=90 cm)" ~ "Demersal Fish",
+#     #Pelagic fish
+#     functional_group=="Small pelagics (<30 cm)" ~ "Pelagic Fish",
+#     functional_group=="Medium pelagics (30 - 89 cm)" ~ "Pelagic Fish",
+#     functional_group=="Large pelagics (>=90 cm)" ~ "Pelagic Fish", 
+#     functional_group=="Small benthopelagics (<30 cm)" ~ "Pelagic Fish",
+#     functional_group=="Medium benthopelagics (30 - 89 cm)" ~ "Pelagic Fish",
+#     functional_group=="Large benthopelagics (>=90 cm)" ~ "Pelagic Fish",
+#     functional_group=="Small bathypelagics (<30 cm)" ~ "Pelagic Fish",
+#     functional_group=="Medium bathypelagics (30 - 89 cm)" ~ "Pelagic Fish",
+#     functional_group=="Large bathypelagics (>=90 cm)" ~ "Pelagic Fish",
+#     #Crustaceans
+#     functional_group=="Shrimps" ~ "Crustaceans",
+#     functional_group=="Lobsters, crabs" ~ "Crustaceans",
+#     functional_group=="Krill" ~ "Crustaceans",
+#     #Reef fish
+#     functional_group=="Small reef assoc. fish (<30 cm)" ~ "Demersal Fish",
+#     functional_group=="Medium reef assoc. fish (30 - 89 cm)" ~ "Demersal Fish",
+#     functional_group=="Large reef assoc. fish (>=90 cm)" ~ "Demersal Fish", 
+#     functional_group=="Small to medium rays (<90 cm)" ~ "Demersal Fish",
+#     #Sharks and rays
+#     functional_group=="Large rays (>=90 cm)" ~ "Demersal Fish",
+#     functional_group=="Small to medium sharks (<90 cm)" ~ "Demersal Fish",
+#     functional_group=="Large sharks (>=90 cm)" ~ "Demersal Fish",
+#     #Moluscs; Other
+#     functional_group=="Other demersal invertebrates" ~ "Moluscs; Other",
+#     functional_group=="Jellyfish" ~ "Aquatic Animals; Others"))
+# 
+# ##Set Unidentified fish as Marine fish; Other
+# SAU = SAU %>% 
+#   mutate(genus_cat = if_else(
+#     scientific_name=="Marine fishes not identified", "Marine fish; Other", genus_cat)) %>% 
+#   filter(year==2014)
 
-country_code_SAU <- read_csv("Species disaggregation/countries_ISO.csv")
-
-SAU = left_join(SAU, country_code_SAU, by=c("fishing_entity"="missing_countries"))
-
-SAU = SAU %>%
-  mutate(genus_cat = case_when(
-    #Cephalopods
-    functional_group=="Cephalopods" ~ "Cephalopods",
-    #Demersal fish
-    functional_group=="Small demersals (<30 cm)" ~ "Demersal Fish",
-    functional_group=="Medium demersals (30 - 89 cm)" ~ "Demersal Fish",
-    functional_group=="Large demersals (>=90 cm)" ~ "Demersal Fish", 
-    functional_group=="Small bathydemersals (<30 cm)" ~ "Demersal Fish",
-    functional_group=="Medium bathydemersals (30 - 89 cm)" ~ "Demersal Fish",
-    functional_group=="Large bathydemersals (>=90 cm)" ~ "Demersal Fish",
-    functional_group=="Small to medium flatfishes (<90 cm)" ~ "Demersal Fish",
-    functional_group=="Large flatfishes (>=90 cm)" ~ "Demersal Fish",
-    #Pelagic fish
-    functional_group=="Small pelagics (<30 cm)" ~ "Pelagic Fish",
-    functional_group=="Medium pelagics (30 - 89 cm)" ~ "Pelagic Fish",
-    functional_group=="Large pelagics (>=90 cm)" ~ "Pelagic Fish", 
-    functional_group=="Small benthopelagics (<30 cm)" ~ "Pelagic Fish",
-    functional_group=="Medium benthopelagics (30 - 89 cm)" ~ "Pelagic Fish",
-    functional_group=="Large benthopelagics (>=90 cm)" ~ "Pelagic Fish",
-    functional_group=="Small bathypelagics (<30 cm)" ~ "Pelagic Fish",
-    functional_group=="Medium bathypelagics (30 - 89 cm)" ~ "Pelagic Fish",
-    functional_group=="Large bathypelagics (>=90 cm)" ~ "Pelagic Fish",
-    #Crustaceans
-    functional_group=="Shrimps" ~ "Crustaceans",
-    functional_group=="Lobsters, crabs" ~ "Crustaceans",
-    functional_group=="Krill" ~ "Crustaceans",
-    #Reef fish
-    functional_group=="Small reef assoc. fish (<30 cm)" ~ "Demersal Fish",
-    functional_group=="Medium reef assoc. fish (30 - 89 cm)" ~ "Demersal Fish",
-    functional_group=="Large reef assoc. fish (>=90 cm)" ~ "Demersal Fish", 
-    functional_group=="Small to medium rays (<90 cm)" ~ "Demersal Fish",
-    #Sharks and rays
-    functional_group=="Large rays (>=90 cm)" ~ "Demersal Fish",
-    functional_group=="Small to medium sharks (<90 cm)" ~ "Demersal Fish",
-    functional_group=="Large sharks (>=90 cm)" ~ "Demersal Fish",
-    #Moluscs; Other
-    functional_group=="Other demersal invertebrates" ~ "Moluscs; Other",
-    functional_group=="Jellyfish" ~ "Aquatic Animals; Others"))
-
-##Set Unidentified fish as Marine fish; Other
-SAU = SAU %>% 
-  mutate(genus_cat = if_else(
-    scientific_name=="Marine fishes not identified", "Marine fish; Other", genus_cat))
-
-##Seperate salmon
-SAU_salmon = SAU %>%
-  filter(str_detect(common_name, fixed('salmon', ignore_case=TRUE)))
-
-##Remove Salmon
-SAU = SAU %>%
-  filter(!str_detect(common_name, fixed('salmon', ignore_case=TRUE)))
-
-#########################Option 2 - use a mix of food balance sheets and FAO/SAU production data
-##Steps
-#1) Calculate proportion of species within each category
-#2) Remove net exports (exports - imports) based food balance sheets and species proportions  
-#3) Apply these proportions to estimated consumption 
-#4) Multiply by the average nutrient composition of each group
-
-##Considerations
-#
 ####################Merge SAU and aquaculture data###########
-commercial_catch = SAU %>% 
+commercial_catch_SAU = SAU %>% 
   filter(fishing_sector %in% c("Industrial", "Artisanal"),
-         !end_use_type %in% c("Fishmeal and fish oil", "Discard"))
-
-commercial_catch = commercial_catch %>%
+         !end_use_type %in% c("Fishmeal and fish oil", "Discard")) %>%
   rename(country = fishing_entity) %>% 
-  dplyr::select(country, iso3c, year, genus_cat, scientific_name, common_name, fishing_sector, 
-                end_use_type, tonnes) %>%
-  mutate(production_sector = "capture")
-
-commercial_catch_agg = commercial_catch %>%
-  group_by(country, iso3c, year, genus_cat, scientific_name,
-           common_name, production_sector) %>%
-  summarize(tonnes = sum(tonnes))
-
-
-###Proportion of artisanal catch retained in the country 
-##(assumed that all artisanal catch is part of the international seafood trade)
-commercial_catch_ggroup = commercial_catch %>% 
-  group_by(iso3c, genus_cat, year, production_sector) %>% 
-  summarize(tonnes_prod = sum(tonnes))
-
-FAO_aquac = FAO_aquac %>%
-  mutate(production_sector = "aquaculture") %>% 
+  dplyr::select(country, iso3c, year, genus_cat, scientific_name, common_name, tonnes)
+FAO_aquac = FAO_prod %>% 
+  filter(Production_source=="Aquaculture production") %>% 
   rename(common_name = ASFIS_species) %>% 
-  dplyr::select(country, iso3c, year, genus_cat, scientific_name, common_name, production_sector, 
-                tonnes)
+  dplyr::select(country, iso3c, year, genus_cat, scientific_name, common_name, tonnes)
 
-FAO_aquac$tonnes = as.numeric(FAO_aquac$tonnes)
-FAO_aquac_agg = FAO_aquac %>% 
+total_commercial_prod = rbind(commercial_catch_SAU, FAO_aquac)
+
+total_commercial_prod = total_commercial_prod %>% 
   group_by(country, iso3c, year, genus_cat, scientific_name, 
-           common_name, production_sector) %>% 
+           common_name) %>% 
   summarize(tonnes = sum(tonnes))
 
-FAO_aquac_agg = FAO_aquac_agg %>% 
-  filter(year<2015)
-
-total_commercial_prod = rbind(commercial_catch_agg, FAO_aquac_agg)
-
-total_commercial_prod = as.data.frame(total_commercial_prod)
-
-#Percent of production in each new category per country and production source
-countries = unique(total_commercial_prod$iso3c)
-genus = unique(total_commercial_prod$genus_cat)
-years = unique(total_commercial_prod$year)
-
-for(k in 1:length(years)){
-  for(j in 1:length(countries)){
-    for(i in 1:length(genus)){
-      x = total_commercial_prod %>% 
-        filter(iso3c == countries[j],
-               genus_cat == genus[i],
-               year == years[k])
-      total_tonnes = sum(x$tonnes)
-      x = x %>% 
-        mutate(prop_catch = tonnes/total_tonnes)
-      y = FAO_export %>% 
-        filter(iso3c == countries[j],
-               genus_cat == genus[i],
-               year == years[k])
-      y = y$tonnes[1]
-      #print(sau_countries[j])
-      #print(genus_categories[i])
-      #print(y)
-      x = x %>% 
-        mutate(pred_exp_catch = prop_catch*y)
-      x$pred_exp_catch[is.na(x$pred_exp_catch)]=0
-      x = x %>% 
-        mutate(pred_consumed_catch = tonnes - pred_exp_catch)
-      if(j==1&i==1&k==1){
-        total_consump = x}else{
-          total_consump = rbind(total_consump, x)}
-    }
-  }
-}
 
 
 ##plot negative values

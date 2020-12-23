@@ -43,7 +43,7 @@ Salmon_aquac =  FAO_prod %>%
   filter(Production_source=="Aquaculture production",
          str_detect(ASFIS_species, fixed('salmon', ignore_case=TRUE)),
          Production_area=="Marine areas",
-         year %in% c("2010", "2011", "2012", "2013", "2014"))
+         year %in% c("2014"))
   
 
 ##Remove freshwater species
@@ -57,7 +57,7 @@ FAO_prod$year = as.character(FAO_prod$year)
 FAO_prod$year = as.numeric(FAO_prod$year)
 
 FAO_prod = FAO_prod %>% 
-  filter(year>2009)
+  filter(year==2014)
 
 FAO_aquac = FAO_prod %>% 
   filter(Production_source=="Aquaculture production")
@@ -102,7 +102,7 @@ FAO_commod$year = as.character(FAO_commod$year)
 FAO_commod$year = as.numeric(FAO_commod$year)
 
 FAO_commod = FAO_commod %>% 
-  filter(year>2009)
+  filter(year==2014)
 
 FAO_export = FAO_commod %>% filter(Element=="Food exports")
 FAO_import = FAO_commod %>% filter(Element=="Food imports")
@@ -153,12 +153,12 @@ FAO_trade = rbind(FAO_trade_fillets, FAO_trade_whole)
 ##Seperate salmon
 Salmon_import = FAO_trade %>%
   filter(Trade_flow=="Imports",
-         year %in% c("2010", "2011", "2012", "2013", "2014"),
+         year %in% c("2014"),
          str_detect(commodity, fixed('salmon', ignore_case=TRUE)))
 
 Salmon_export = FAO_trade %>%
   filter(Trade_flow=="Exports",
-         year %in% c("2010", "2011", "2012", "2013", "2014"),
+         year %in% c("2014"),
          str_detect(commodity, fixed('salmon', ignore_case=TRUE)))
 
 ##Salmon-free imports
@@ -178,10 +178,10 @@ FAO_trade_import$scientific_name<- gsub(")","",FAO_trade_import$scientific_name)
 FAO_trade_import$common_name<- gsub("Other ","",FAO_trade_import$common_name)
 
 FAO_trade_import = FAO_trade_import %>% 
-  select(iso3c, commodity, genus_cat, common_name, scientific_name, year, tonnes)
+  select(iso3c, country, commodity, genus_cat, common_name, scientific_name, year, tonnes)
 
 FAO_import_agg = FAO_trade_import %>% 
-  group_by(common_name, scientific_name , genus_cat, iso3c, year) %>% 
+  group_by(common_name, scientific_name , genus_cat, iso3c, country, year) %>% 
   summarise(tonnes = sum(tonnes))
 
 ##Calculate proportion of spp in each category, country and year
@@ -198,13 +198,17 @@ FAO_import_agg = FAO_import_agg %>%
   mutate(spp_prop = tonnes/tonnes_total)
 
 FAO_import_final = FAO_import_agg %>% 
-  select(genus_cat, iso3c, year, common_name, scientific_name, spp_prop)
+  select(genus_cat, iso3c, country,  year, common_name, scientific_name, tonnes, spp_prop)
 
 FAO_import_final$year = as.character(FAO_import_final$year)
+
+FAO_import_final = FAO_import_final %>% 
+  filter(year==2014)
+
   
 ##############################SAU data
 ##Read SAU data
-SAU = read_csv("C:/Users/Daniel/Google Drive/MPAs and Human Nutrition/Data/SAU data/complete data/SAU raw database by EEZ 2010_2014.csv")
+SAU = read_csv("C:/Users/Daniel/Google Drive/MPAs and Human Nutrition/Data/SAU data/complete data/SAU raw database by EEZ 2014.csv")
 
 country_code_SAU <- read_csv("Species disaggregation/countries_ISO.csv")
 
@@ -307,9 +311,6 @@ FAO_aquac_agg = FAO_aquac %>%
            common_name, production_sector) %>% 
   summarize(tonnes = sum(tonnes))
 
-FAO_aquac_agg = FAO_aquac_agg %>% 
-  filter(year<2015)
-
 total_commercial_prod = rbind(commercial_catch_agg, FAO_aquac_agg)
 
 total_commercial_prod = as.data.frame(total_commercial_prod)
@@ -317,22 +318,18 @@ total_commercial_prod = as.data.frame(total_commercial_prod)
 #Percent of production in each new category per country and production source
 countries = unique(total_commercial_prod$iso3c)
 genus = unique(total_commercial_prod$genus_cat)
-years = unique(total_commercial_prod$year)
 
-for(k in 1:length(years)){
   for(j in 1:length(countries)){
     for(i in 1:length(genus)){
       x = total_commercial_prod %>% 
         filter(iso3c == countries[j],
-               genus_cat == genus[i],
-               year == years[k])
+               genus_cat == genus[i])
       total_tonnes = sum(x$tonnes)
       x = x %>% 
         mutate(prop_catch = tonnes/total_tonnes)
       y = FAO_export %>% 
         filter(iso3c == countries[j],
-               genus_cat == genus[i],
-               year == years[k])
+               genus_cat == genus[i])
       y = y$tonnes[1]
       #print(sau_countries[j])
       #print(genus_categories[i])
@@ -342,23 +339,18 @@ for(k in 1:length(years)){
       x$pred_exp_catch[is.na(x$pred_exp_catch)]=0
       x = x %>% 
         mutate(pred_consumed_catch = tonnes - pred_exp_catch)
-      if(j==1&i==1&k==1){
+      if(j==1&i==1){
         total_consump = x}else{
           total_consump = rbind(total_consump, x)}
     }
   }
-}
+
 
 
 ##plot negative values
-total_consump_2014 = total_consump %>%
-  filter(year==2014)
-
-ggplot(data=total_consump_2014)+
-  geom_point(aes(x=iso3c, y=pred_consumed_catch))+
-  theme_classic()+
-  theme(axis.text.x = element_text(angle = 90))+
-  geom_hline(yintercept = 0)
+# ggplot(data=total_consump)+
+#   geom_point(aes(x=iso3c, y=pred_consumed_catch))+
+#   theme_classic()
 
 ##############Set negatives to zero#############
 total_consump = total_consump %>% 
@@ -368,30 +360,9 @@ total_consump = total_consump %>%
 total_consumption = total_consump %>% 
   dplyr::select(country, iso3c, year, genus_cat, scientific_name, common_name, production_sector, pred_consumption)
 
-#########Add imported fish#############
-
-##Predict reexport
-pred_reexport = total_consump %>% 
-  group_by(year, iso3c, genus_cat) %>% 
-  summarize(reexport = sum(negative_values)) 
-
-##Remove reexport from imports
-FAO_import = FAO_import %>% 
-  filter(year %in% years)
-FAO_import = left_join(FAO_import, pred_reexport, by=c("year", "iso3c", "genus_cat"))
-
-##Add imports
-FAO_pred_import = FAO_import %>% 
-  mutate(pred_import = tonnes + reexport,
-         pred_consumption = if_else(pred_import<0,0,pred_import),
-         scientific_name = "NA",
-         production_sector = "Imports",
-         common_name = "NA") %>%
-  rename(country=Country) %>% 
-  drop_na(pred_consumption) %>% 
-  dplyr::select(country, iso3c, year, genus_cat, scientific_name, common_name, production_sector, pred_consumption)
-
-total_consumption = rbind(total_consumption, FAO_pred_import)
+# ggplot(data=total_consumption)+
+#   geom_point(aes(x=iso3c, y=pred_consumption))+
+#   theme_classic()
 
 ##Add recreational and subsistance
 consumption_catch = SAU %>% 
@@ -407,120 +378,97 @@ total_consumption = rbind(total_consumption, consumption_catch)
 total_consumption = total_consumption %>% 
   select(iso3c, year, genus_cat, common_name, scientific_name, production_sector, pred_consumption)
 
+#########Add imported fish#############
+
 ##Calculate predicted imoprt consumption by spp
-import_spp_consump = total_consumption %>% 
-  filter(production_sector=="Imports") %>% 
-  group_by(iso3c, year, genus_cat) %>% 
-  summarise(tonnes = sum(pred_consumption))
+FAO_import_consump = FAO_import_final %>%
+  mutate(production_sector = "import") %>% 
+  dplyr::select(country, iso3c, year, genus_cat, scientific_name, common_name, production_sector, 
+                tonnes)
 
-import_spp_consump$year=as.character(import_spp_consump$year)
+FAO_import_consump$tonnes = as.numeric(FAO_import_consump$tonnes)
+FAO_import_consump = FAO_import_consump %>% 
+  group_by(iso3c, year, genus_cat, scientific_name, 
+           common_name, production_sector) %>% 
+  summarize(pred_consumption = sum(tonnes)) %>% 
+  ungroup()
 
-import_spp_consump = left_join(import_spp_consump, FAO_import_final, by=c("iso3c", "year", "genus_cat"))
-
-import_spp_consump = import_spp_consump %>% 
-  mutate(pred_consumption = tonnes*spp_prop,
-         production_sector = "import") %>%
-  select(iso3c, year, genus_cat, common_name, scientific_name, production_sector, pred_consumption)
-
-import_spp_consump = as.data.frame(import_spp_consump)
-
-total_consumption = total_consumption %>% 
-  filter(!production_sector=="Imports")
-
-total_consumption = rbind(total_consumption, import_spp_consump)
-
-# ##plot values
-# total_consump_2014 = total_consumption %>%
-#   filter(year==2014)
-# 
-# ggplot(data=total_consump_2014)+
-#   geom_point(aes(x=iso3c, y=pred_consumption))+
-#   theme_classic()+
-#   theme(axis.text.x = element_text(angle = 90))+
-#   geom_hline(yintercept = 0)
+total_consumption = rbind(total_consumption, FAO_import_consump)
 
 ###################Now, lets do this for salmon(production + imports - exports)
 
+##Salmon capture from SAU
 SAU_salmon = SAU_salmon %>% 
-  group_by(iso3c, year, scientific_name, common_name, genus_cat) %>% 
+  group_by(iso3c, scientific_name, common_name, genus_cat) %>% 
   summarise(tonnes = sum(tonnes)) %>% 
-  mutate(source = "capture")
+  mutate(source = "capture") %>% 
+  ungroup()
 
+##Salmon Aquaculture production from FAO
 Salmon_aquac = Salmon_aquac %>% 
   rename(common_name = ASFIS_species) %>% 
-  group_by(iso3c, year, scientific_name, common_name, genus_cat) %>% 
+  group_by(iso3c, scientific_name, common_name, genus_cat) %>% 
   summarise(tonnes = sum(tonnes)) %>% 
-  mutate(source = "aquaculture")
+  mutate(source = "aquaculture") %>% 
+  ungroup()
 
-SAU_salmon$year = as.character(SAU_salmon$year)
-Salmon_aquac$year = as.character(Salmon_aquac$year)
+##Salmon Import
+Salmon_import_final = Salmon_import %>%
+  mutate(genus_cat = "Freshwater Fish",
+         common_name = "Salmon", 
+         scientific_name = "NA",
+         source = "import") %>% 
+  group_by(iso3c, scientific_name, common_name, genus_cat, source) %>%
+  summarise(tonnes = sum(tonnes)) %>% 
+  ungroup()
 
-salmon_prod = rbind(SAU_salmon, Salmon_aquac)
+##Bind all production
+salmon_prod = rbind(SAU_salmon, Salmon_aquac, Salmon_import_final)
 
+##Salmon production by source (capture, aquaculture, imports)
 salmon_prod = salmon_prod %>% 
-  group_by(year, iso3c, source) %>% 
-  summarise(tonnes=sum(tonnes))
+  group_by(iso3c, source) %>% 
+  summarise(tonnes=sum(tonnes)) %>% 
+  ungroup()
 
+##Total Salmon production by country and year
 salmon_prod_total = salmon_prod %>% 
-  group_by(year, iso3c) %>% 
-  summarise(tonnes_total=sum(tonnes))
+  group_by(iso3c) %>% 
+  summarise(tonnes_total=sum(tonnes)) %>% 
+  ungroup()
 
-salmon_prod = left_join(salmon_prod, salmon_prod_total, by=c("year", "iso3c"))
-
-salmon_prod = salmon_prod %>% 
+##Calculate proportion from each source
+salmon_prod = left_join(salmon_prod, salmon_prod_total, by=c("iso3c")) %>% 
   mutate(prop_source = tonnes/tonnes_total)
-  
-Salmon_export = Salmon_export %>% 
-  group_by(iso3c, year) %>% 
-  summarise(tonnes_export = sum(tonnes))
 
-salmon_prod_exp = full_join(salmon_prod, Salmon_export, by=c("year", "iso3c"))
+##Calculate Salmon export per country and year
+Salmon_export = Salmon_export %>% 
+  group_by(iso3c) %>% 
+  summarise(tonnes_export = sum(tonnes)) %>% 
+  ungroup()
+
+salmon_prod_exp = full_join(salmon_prod, Salmon_export, by=c("iso3c"))
   
 salmon_prod_exp$prop_source[is.na(salmon_prod_exp$prop_source)] = 1
 salmon_prod_exp$tonnes[is.na(salmon_prod_exp$tonnes)] = 0
 
 salmon_prod_exp = salmon_prod_exp %>% 
   mutate(pred_export = prop_source*tonnes_export,
-         net_prod = tonnes-pred_export)
+         pred_consumption = tonnes-pred_export)
 
-salmon_net_prod = salmon_prod_exp %>% 
-  filter(net_prod>0) %>%
-  mutate(genus_cat = "Freshwater Fish",
-         common_name = "Salmon", 
-         scientific_name = "NA") %>% 
-  rename(production_sector = source,
-         pred_consumption = net_prod) %>% 
-  select(iso3c, year, genus_cat, common_name, scientific_name, production_sector, pred_consumption)
-
-salmon_reexport = salmon_prod_exp %>% 
-  filter(net_prod<0) %>% 
-  group_by(iso3c, year) %>% 
-  summarise(net_prod = sum(net_prod))
-
-Salmon_import = Salmon_import %>% 
-  group_by(iso3c, year) %>% 
-  summarise(tonnes_import = sum(tonnes))
-
-salmon_reexport = full_join(salmon_reexport, Salmon_import, by=c("iso3c", "year"))
-
-salmon_reexport$net_prod[is.na(salmon_reexport$net_prod)] = 0
-
-salmon_reexport = salmon_reexport %>% 
-  mutate(pred_consumption = tonnes_import + net_prod)
 
 ##Set negatives to zero
-salmon_reexport$pred_consumption[salmon_reexport$pred_consumption<0] = 0
+salmon_prod_exp$pred_consumption[salmon_prod_exp$pred_consumption<0] = 0
 
-salmon_net_import = salmon_reexport %>% 
-  filter(pred_consumption>0) %>%
-  mutate(genus_cat = "Freshwater Fish",
-         common_name = "Salmon", 
-         scientific_name = "NA",
-         production_sector = "import") %>% 
-  select(iso3c, year, genus_cat, common_name, scientific_name, production_sector, pred_consumption)
-
-salmon_consumption = rbind(salmon_net_prod, salmon_net_import)
-salmon_consumption = as.data.frame(salmon_consumption)
+salmon_consumption = salmon_prod_exp %>% 
+  rename("production_sector" = "source") %>% 
+  mutate(year=2014,
+         genus_cat = "Freshwater Fish",
+         scientific_name="NA",
+         common_name = "Salmon") %>% 
+  dplyr::select(iso3c, year, genus_cat, scientific_name, 
+                common_name, production_sector, pred_consumption)
+#salmon_consumption = as.data.frame(salmon_consumption)
 
 total_consumption = rbind(total_consumption, salmon_consumption)
 
@@ -583,7 +531,7 @@ spp_prop = spp_prop %>%
 
 ##Save the results
 #Total
-write.csv(spp_prop, "MAR_spp_proportions_2010_2014_SAU.csv", row.names = FALSE)
+write.csv(spp_prop, "data/MAR_spp_proportions_2014_SAU.csv", row.names = FALSE)
 #Aquaculture
 write.csv(aquac_spp_prop, "MAR_aquaculture_spp_proportions_2010_2014_SAU.csv", row.names = FALSE)
 #Capture
