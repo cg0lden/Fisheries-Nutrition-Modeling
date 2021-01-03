@@ -36,6 +36,12 @@ AFCD_long = AFCD_long %>%
 
 AFCD_long$value = as.numeric(AFCD_long$value) 
 AFCD_long$variable = as.character(AFCD_long$variable)
+AFCD_long = AFCD_long %>% filter(!variable=="edible")
+
+ggplot(data=AFCD_long) +
+  geom_point(aes(x=Preparation, y=value)) +
+  facet_wrap(~variable, scales = "free", ncol=1) +
+  theme_classic()
 
 AFCD_n3 = AFCD_long %>% 
   filter(variable=="Omega-3 fatty acids") %>% 
@@ -45,6 +51,58 @@ AFCD_n3 = AFCD_long %>%
 ggplot(data=AFCD_n3) +
   geom_point(aes(x=Preparation, y=value)) +
   theme_classic()
+
+AFCD_long$ID = 1:nrow(AFCD_long)
+
+AFCD_long_raw = AFCD_long %>% 
+  filter(Preparation %in% c("Raw", "raw", "r", "crudo", "cruda", "cru", "crua", "crudas")) %>% 
+  mutate(proc = "raw")
+
+AFCD_long_frozen = AFCD_long %>% 
+  filter(Preparation %in% c("frozen", "Frozen", "congelada", "f", "f; fz", "f;fz")) %>% 
+  mutate(proc = "frozen")
+
+AFCD_long_canned = AFCD_long %>% 
+  filter(Preparation %in% c("canned", "enlatado", "enlatado al natural", "enlatada")) %>% 
+  mutate(proc = "canned")
+
+AFCD_long_other = AFCD_long %>% 
+  filter(!Preparation %in% c("Raw", "raw", "r", "crudo", "cruda", "cru", "crua", "crudas",
+                             "frozen", "Frozen", "congelada", "f", "f; fz", "f;fz",
+                             "canned", "enlatado", "enlatado al natural", "enlatada")) %>% 
+  mutate(proc = "cooked")
+
+AFCD_long_all = rbind(AFCD_long_raw, AFCD_long_canned, AFCD_long_frozen, AFCD_long_other)
+
+ggplot(data=AFCD_long_all) +
+  geom_point(aes(x=proc, y=value)) +
+  facet_wrap(~variable, scales = "free", ncol=1) +
+  theme_classic()
+
+ISSCAAP_groups <- read_csv("data/ISSCAAP_groups.csv")
+AFCD_long_ISCAAP = AFCD_long_all %>% 
+  filter(!is.na(ISSCAAP)) %>% 
+  left_join(ISSCAAP_groups, by=c("ISSCAAP" = "ISSCAAP_code")) %>% 
+  group_by(variable, proc, Commodity_group) %>% 
+  summarise(value = mean(value))
+  
+write.csv(AFCD_long_ISCAAP, "average_by_category.csv", row.names = F)
+AFCD_long_ISCAAP_o3 = AFCD_long_all %>% 
+  filter(!is.na(ISSCAAP),
+         variable=="Omega-3 fatty acids") %>% 
+  left_join(ISSCAAP_groups, by=c("ISSCAAP" = "ISSCAAP_code")) %>% 
+  group_by(variable, proc, Commodity_group) %>% 
+  summarise(value = mean(value))
+
+ggplot(data = AFCD_long_ISCAAP) +
+  geom_point(aes(x=Commodity_group, y=value, colour = proc))+
+  facet_wrap(~variable, scales = "free", nrow=1)+
+  theme(axis.text.x = element_text(angle = 90))
+
+ggplot(data = AFCD_long_ISCAAP_o3) +
+  geom_point(aes(x=Commodity_group, y=value))+
+  facet_wrap(~proc, scales = "free", nrow=1)+
+  theme(axis.text.x = element_text(angle = 90)) 
 
 ##############Import and clean FAO data
 ##########Import Aquaculture data####################
