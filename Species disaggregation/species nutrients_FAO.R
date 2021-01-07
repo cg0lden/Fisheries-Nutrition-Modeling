@@ -4,29 +4,51 @@ library(rfishbase)
 library(fuzzyjoin)
 
 ##load data
-fw_consump_combined_final <- read_csv("data/fw_consump_combined_final_wmodelcode.csv")
-MAR_spp_proportions_2010_2014_SAU <- read_csv("data/MAR_spp_proportions_2014_SAU.csv")
+#all_spp_proportions_2014_FAO <- read_csv("data/all_spp_proportions_2014_FAO_fishmeal.csv")
+all_spp_proportions_2014_FAO <- read_csv("data/all_spp_proportions_2014_FAO.csv")
 
-##Read SAU data
-SAU = read_csv("C:/Users/Daniel/Google Drive/MPAs and Human Nutrition/Data/SAU data/complete data/SAU raw database by EEZ 2010_2014.csv")
 
-country_code_SAU <- read_csv("Species disaggregation/countries_ISO.csv")
+all_spp = all_spp_proportions_2014_FAO %>% 
+  rename(category = genus_cat, 
+         genus = Genus,
+         family = Family,
+         order = Order,
+         broad_category = Production_area) %>% 
+  mutate(scientific_name = tolower(scientific_name),
+         common_name = tolower(common_name),
+         genus = tolower(genus),
+         family = tolower(family),
+         order = tolower(order)) %>% 
+  distinct(common_name, scientific_name, .keep_all = TRUE) %>% 
+  select(-iso3c, -year, -tonnes, -spp_prop) 
 
-SAU = left_join(SAU, country_code_SAU, by=c("fishing_entity"="missing_countries"))
+##Insert Species groups
+QP_groups <- read_csv("data/QP_groups.csv") %>% 
+  mutate(scientific_name = "NA",
+         genus = "NA",
+         family = "NA",
+         order = "NA",
+         production_sector = "Aquaculture",
+         broad_category = "NA")
 
-##Load fishbase data to store taxa information for all species
-fish_taxa <- read_csv("data/fish_taxa.csv")
-family_info = fish_taxa %>% 
-  dplyr::select(Genus, Family, Order) %>% 
-  distinct(Genus, .keep_all = TRUE)
+all_spp = rbind(all_spp, QP_groups)
 
-##Seaflife
-seaflife_table = sealifebase %>% 
-  select(Genus, Family, Order) %>% 
-  distinct(Genus, .keep_all = TRUE)
+all_spp = all_spp %>%
+  mutate(Iron = "Iron",
+         Zinc = "Zinc",
+         "Vitamin A" = "Vitamin A",
+         "Vitamin B12" = "Vitamin B-12",
+         "Omega-3 fatty acids" = "Omega-3 fatty acids",
+         Protein = "Protein",
+         Calcium = "Calcium")
 
-taxa_table = rbind(family_info, seaflife_table) %>% 
-  distinct(Genus, .keep_all = TRUE)
+all_spp = reshape2::melt(all_spp, id.vars = c("scientific_name", "common_name", "genus", "category", "family", "order", "production_sector", "broad_category"),
+                         measure.vars = c("Iron", "Zinc", "Protein", "Vitamin A", "Vitamin B12",
+                                          "Omega-3 fatty acids", "Calcium"))
+all_spp = all_spp %>%
+  rename(nutrient = variable) %>%
+  select(-value)
+
 
 ##Load AFCD
 AFCD <- read_csv("~/Fisheries-Nutrition-Modeling/AFCD/AFCD_live.csv")
@@ -63,90 +85,6 @@ AFCD_long = AFCD_long %>%
 AFCD_long$value = as.numeric(AFCD_long$value) 
 AFCD_long$variable = as.character(AFCD_long$variable)
 
-##Get unique species
-fw_spp = fw_consump_combined_final %>% 
-  rename("iso3c" = "country_code",
-         "common_name" = "common_name_simple",
-         "production_sector" = "source",
-         "tonnes" = "consumption_tons_mid",
-         "scientific_name" = "sci_name") %>% 
-  mutate(category = if_else(is.na(model_code), "freshwater", model_code)) %>% 
-  dplyr::select(common_name, scientific_name, family, order, category)%>% 
-  distinct(common_name, scientific_name, .keep_all = TRUE) %>% 
-  separate(scientific_name, c("genus", "spp"), " ", remove=FALSE) %>% 
-  mutate(broad_category = "freshwater")
-
-
-mar_spp = MAR_spp_proportions_2010_2014_SAU %>% 
-  select(common_name) %>% 
-  distinct(common_name, .keep_all = TRUE)
-
-mar_spp_SAU = SAU %>%
-  select(common_name, scientific_name, functional_group) %>% 
-  distinct(common_name, .keep_all = TRUE) %>% 
-  separate(scientific_name, c("genus", "spp"), " ", remove=FALSE)
-
-mar_spp_SAU = left_join(mar_spp_SAU, taxa_table, by=c("genus" = "Genus")) %>% 
-  rename("family" = "Family",
-         "order" = "Order") %>% 
-  select(-functional_group)
-
-fao_prod_taxa_classification_20201216 <- read_csv("data/fao_prod_taxa_classification_20201216.csv") %>% 
-  rename("scientific_name" = "SciName",
-         "common_name" = "CommonName",
-         "genus" = "Genus",
-         "family" = "Family",
-         "order" = "Order") %>% 
-  mutate(spp="NA") %>% 
-  select(common_name, scientific_name, genus, spp, family, order)
-
-all_spp_mar = rbind(mar_spp_SAU, fao_prod_taxa_classification_20201216) %>% 
-  distinct(common_name, .keep_all = TRUE)
-  
-mar_spp = left_join(mar_spp, all_spp_mar, by="common_name") %>% 
-  mutate(broad_category = "marine")
-
-all_spp_categories <- read_csv("data/all_spp_categories.csv")
-
-mar_spp = left_join(mar_spp, all_spp_categories, by="scientific_name") %>% 
-  rename("category" = "genus_cat")
-
-all_spp = rbind(mar_spp, fw_spp)  %>% 
-  mutate(scientific_name = tolower(scientific_name),
-         common_name = tolower(common_name),
-         genus = tolower(genus),
-         family = tolower(family),
-         order = tolower(order)) %>% 
-  distinct(common_name, scientific_name, .keep_all = TRUE) 
-
-##Insert Species groups
-QP_groups <- read_csv("data/QP_groups.csv") %>% 
-  mutate(scientific_name = "NA",
-         genus = "NA",
-         spp="NA",
-         family = "NA",
-         order = "NA",
-         broad_category = "freshwater")
-
-all_spp = rbind(all_spp, QP_groups)
-
-all_spp = all_spp %>%
-  mutate(Iron = "Iron",
-         Zinc = "Zinc",
-         "Vitamin A" = "Vitamin A",
-         "Vitamin B12" = "Vitamin B-12",
-         "Omega-3 fatty acids" = "Omega-3 fatty acids",
-         Protein = "Protein",
-         Calcium = "Calcium")
-
-all_spp = reshape2::melt(all_spp, id.vars = c("scientific_name", "common_name", "genus", "spp", "category", "family", "order", "broad_category"),
-                            measure.vars = c("Iron", "Zinc", "Protein", "Vitamin A", "Vitamin B12",
-                                             "Omega-3 fatty acids", "Calcium"))
-all_spp = all_spp %>%
-  rename(nutrient = variable) %>%
-  select(-value)
-
-#write.csv(all_spp, "fw_mar_spp.csv", row.names = FALSE)
 ######calculate average for species scientific names, genus and family#####################
 #calculate mean values for species
 afcd_spp = AFCD_long %>%
@@ -297,20 +235,20 @@ missing = missing %>%
 #Join datasets
 afcd_comm_name$variable = as.character(afcd_comm_name$variable)
 missing = regex_left_join(missing, afcd_comm_name, by=c("common_name" = "Food.name.in.English", "nutrient"="variable")) %>% 
-  group_by(scientific_name, common_name, genus, spp, category, broad_category, family, order, nutrient) %>% 
+  group_by(scientific_name, common_name, genus, category, production_sector, broad_category, family, order, nutrient) %>% 
   summarise(value = mean(value)) %>% 
   ungroup()
 
 missing_name2 = missing %>% 
- filter(!is.na(value))
+  filter(!is.na(value))
 
 ##include filled values
 sau_nutrition = rbind(sau_nutrition, missing_name2)
 
 ##Seperate remaining missing values
 missing = missing %>% 
- filter(is.na(value)) %>% 
- dplyr::select(-value)
+  filter(is.na(value)) %>% 
+  dplyr::select(-value)
 
 ###############Fill missing with order #######################
 #Join datasets
@@ -366,7 +304,7 @@ missing = missing %>%
   filter(is.na(value)) %>% 
   dplyr::select(-value)
 
-write.csv(sau_nutrition, "data/mar_fw_spp_nutrients.csv", row.names = F)
+write.csv(sau_nutrition, "data/mar_fw_spp_nutrients_FAO.csv", row.names = F)
 
 
 ####Stats for all nutrients
@@ -377,7 +315,7 @@ fill_name = rbind(missing_name1, missing_name2) %>% mutate(taxa_fill = "Common n
 fill_order = missing_order %>% mutate(taxa_fill = "Order")
 fill_cat = rbind(missing_cat, missing_bcat) %>% mutate(taxa_fill = "GND Category")
 fill_all = rbind(fill_spp, fill_family, fill_genus,
-                    fill_name, fill_order, fill_cat)
+                 fill_name, fill_order, fill_cat)
 
 fill_stats = fill_all %>% 
   group_by(taxa_fill, nutrient) %>% 
@@ -388,7 +326,7 @@ fill_stats$taxa_fill = factor(fill_stats$taxa_fill,
 ggplot(data=fill_stats)+
   geom_tile(aes(x=nutrient, y=taxa_fill, fill=n)) +
   geom_text(aes(x=nutrient, y=taxa_fill, label = n)) +
-  labs(title="SAU (2,393 species)")
+  labs(title="FAO (1,981 unique species)")
 
 fill_stats_wide = fill_stats %>% 
   spread(key=nutrient, value = n) %>% 
@@ -397,4 +335,4 @@ fill_stats_wide = fill_stats %>%
 
 write.csv(fill_stats_wide, "fill_stats.csv", row.names = F)
 
-
+  
