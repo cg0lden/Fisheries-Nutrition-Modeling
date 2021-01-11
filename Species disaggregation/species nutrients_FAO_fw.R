@@ -70,7 +70,7 @@ all_spp = all_spp %>%
   select(-value)
 
 ##Load AFCD
-AFCD <- read_csv("~/Fisheries-Nutrition-Modeling/AFCD/AFCD_live.csv")
+AFCD <- read.csv("~/Fisheries-Nutrition-Modeling/AFCD/AFCD_live.csv")
 
 AFCD = AFCD %>% 
   mutate(vitA = if_else(is.na(Vitamin.A.retinol.activity.equivalent.RAE.calculated.by.summation.of.the.vitamin.A.activities.of.retinol.and.the.active.carotenoids),
@@ -82,8 +82,19 @@ AFCD = AFCD %>%
 
 AFCD_columns = as.data.frame(names(AFCD))
 
+AFCD = AFCD %>% 
+  select(names(AFCD)[1:29], 
+         "Study.ID.number",
+         "Iron.total", 
+         "Zinc",
+         "vitA",
+         "Vitamin.B12",
+         "Fatty.acids.total.n3.polyunsaturated",
+         "Protein", 
+         "Calcium")
+
 ##Change to long format
-AFCD_long = reshape2::melt(AFCD, id.vars = names(AFCD)[1:29], measure.vars = names(AFCD)[30:length(names(AFCD))]) %>% 
+AFCD_long = reshape2::melt(AFCD, id.vars = names(AFCD)[1:30], measure.vars = names(AFCD)[31:length(names(AFCD))]) %>% 
   drop_na(value)
 
 #Clean database
@@ -106,15 +117,31 @@ AFCD_long = AFCD_long %>%
 AFCD_long$value = as.numeric(AFCD_long$value) 
 AFCD_long$variable = as.character(AFCD_long$variable)
 
-# df = AFCD_long %>%
-#   group_by(variable) %>%
-#   summarise(qt = quantile(value))
-# 
-# nut = unique(AFCD_long$variable)
-# for(n in 1:length(nut)){
-#   df_nut = as.numeric(df$qt[df$variable==nut[n]][4])
-#   write.csv(AFCD_long %>% filter(variable==nut[n], value>df_nut) %>% arrange(desc(value)), paste0("AFCD_outliers_", nut[n],".csv"), row.names = F)
-# }
+write.csv(AFCD_long, "AFCD_long.csv", row.names = F)
+
+df = AFCD_long %>%
+  group_by(variable) %>%
+  summarise(qt = quantile(value)[4])
+
+nut = unique(AFCD_long$variable)
+for(n in 1:length(nut)){
+  df_nut = as.numeric(df$qt[df$variable==nut[n]])
+  AFCD_long_out = AFCD_long %>% filter(variable==nut[n], value>df_nut) %>% arrange(desc(value))
+  if(n==1){
+    AFCD_long_outlier = AFCD_long_out
+  }else{
+    AFCD_long_outlier = rbind(AFCD_long_outlier,
+                          AFCD_long_out)
+  }
+
+}
+
+write.csv(AFCD_long_outlier, "AFCD_long_outliers.csv", row.names = F)
+
+for(n in 1:length(nut)){
+  df_nut = as.numeric(df$qt[df$variable==nut[n]])
+  write.csv(AFCD_long %>% filter(variable==nut[n], value>df_nut) %>% arrange(desc(value)), paste0("AFCD_outliers_", nut[n],".csv"), row.names = F)
+}
 
 AFCD_parts <- read_csv("data/AFCD_parts.csv")
 AFCD_parts = as.vector(AFCD_parts$Parts)
