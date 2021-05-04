@@ -334,30 +334,6 @@ total_consumption_diad = left_join(FAO_prod_diad, spp_total_diad, by=c("iso3c", 
 
 total_consumption = rbind(total_consumption, total_consumption_diad)
 
-###Multiply by edible portion##########
-edible_ngroup = c(0.8, 0.99, 0.7, 0.8, 0.8, 0.8, 0.8, 0.9, 0.9)
-edible = as.data.frame(unique(spp_prop$genus_cat))
-edible$edible = edible_ngroup
-edible = edible %>% rename(genus_cat="unique(spp_prop$genus_cat)")
-
-# 1         Cephalopods   0.99
-# 2  Marine Fish; Other   0.80
-# 3             Shrimps   0.80
-# 4             Mussels   0.70
-# 5        Sharks, rays   0.90
-# 6     Lobsters, crabs   0.60
-# 7      Moluscs; Other   0.80
-# 8             Oysters   0.70
-# 9           Jellyfish   1.00
-# 10              Krill   1.00
-
-total_consumption = left_join(total_consumption, edible, by="genus_cat")
-
-total_consumption = total_consumption %>% 
-  mutate(edible_portion = pred_consumption*edible) %>% 
-  rename(pred_consumption_whole = pred_consumption,
-         pred_consumption = edible_portion)
-
 ###Total (including imports)
 spp_total = total_consumption %>%
   group_by(iso3c, year) %>% 
