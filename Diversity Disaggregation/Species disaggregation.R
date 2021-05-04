@@ -334,6 +334,29 @@ total_consumption_diad = left_join(FAO_prod_diad, spp_total_diad, by=c("iso3c", 
 
 total_consumption = rbind(total_consumption, total_consumption_diad)
 
+###Multiply by edible portion##########
+edible_ngroup = c(0.8, 0.99, 0.7, 0.8, 0.8, 0.8, 0.8, 0.9, 0.9)
+edible = as.data.frame(unique(spp_prop$genus_cat))
+edible$edible = edible_ngroup
+edible = edible %>% rename(genus_cat="unique(spp_prop$genus_cat)")
+
+# 1         Cephalopods   0.99
+# 2  Marine Fish; Other   0.80
+# 3             Shrimps   0.80
+# 4             Mussels   0.70
+# 5        Sharks, rays   0.90
+# 6     Lobsters, crabs   0.60
+# 7      Moluscs; Other   0.80
+# 8             Oysters   0.70
+# 9           Jellyfish   1.00
+# 10              Krill   1.00
+
+total_consumption = left_join(total_consumption, edible, by="genus_cat")
+
+total_consumption = total_consumption %>% 
+  mutate(edible_portion = pred_consumption*edible) %>% 
+  rename(pred_consumption_whole = pred_consumption,
+         pred_consumption = edible_portion)
 
 ###Total (including imports)
 spp_total = total_consumption %>%
@@ -357,273 +380,3 @@ spp_prop = spp_prop %>%
 ##Save the results
 #Total
 write.csv(spp_prop, "data/MAR_spp_proportions_2014_FAO.csv", row.names = FALSE)
-#Aquaculture
-write.csv(aquac_spp_prop, "MAR_aquaculture_spp_proportions_2010_2014_SAU.csv", row.names = FALSE)
-#Capture
-write.csv(capture_spp_prop, "MAR_capture_spp_proportions_2010_2014_SAU.csv", row.names = FALSE)
-
-
-##Compare food balance vs predicted consumption
-FAO_commod_total = FAO_commod %>% 
-  filter(Element=="Total food supply",
-         year %in% c("2010", "2011", "2012", "2013", "2014")) %>% 
-  group_by(iso3c, year) %>% 
-  summarise(tonnes_FB = sum(tonnes))
-
-FAO_commod_total$year = as.character(FAO_commod_total$year)
-FAO_commod_total = left_join(FAO_commod_total, spp_total, by=c("iso3c", "year"))
-
-FAO_commod_total = FAO_commod_total %>% 
-  filter(year=="2014")
-
-ggplot(FAO_commod_total, aes(x=tonnes_FB, y=tonnes_total, label = iso3c)) +
-  geom_point() +
-  theme_classic() +
-  ylab("Predicted Seafood Consumption (tonnes)") +
-  xlab("FB Seafood Consumption (tonnes)") +
-  geom_abline(intercept = 0, slope = 1) +
-  geom_text(check_overlap = TRUE, nudge_y = 1000000)
-####Disaggregate imports
-
-
-
-
-
-
-
-
-
-
-# ########################Now, lets do this using only FAO data############################################
-# ###Fisrt, seperate marine production
-# 
-# FAO = FAO_prod %>% 
-#   filter(Production_source_detailed %in% c("Capture production", "Aquaculture production (marine)"),
-#          Production_area %in% c("Marine areas"))
-# 
-# #clean data
-# FAO = FAO %>% 
-#   select(country, iso3c, year, scientific_name, ASFIS_species, Production_source, genus_cat, tonnes)  
-# 
-# ############Use SAU to predict fishmeal coversion 
-# 
-# #First, calculate fishmeal production by species, year and country
-# fishmeal_catch = SAU %>% 
-#   filter(end_use_type %in% c("Fishmeal and fish oil")) %>%
-#   rename(country = fishing_entity,
-#          iso3c = country_ISO) %>% 
-#   group_by(iso3c, year, scientific_name) %>% 
-#   summarise(tonnes_fishmeal = sum(tonnes)) %>% 
-#   drop_na(iso3c)
-# 
-# ##Next, calculate total catch for these species
-# total_catch = SAU %>% 
-#   rename(country = fishing_entity,
-#          iso3c = country_ISO) %>% 
-#   group_by(iso3c, year, scientific_name) %>% 
-#   summarise(tonnes = sum(tonnes)) %>% 
-#   drop_na(iso3c)
-# 
-# ##Then, merge the two datasets
-# fishmeal_catch = left_join(fishmeal_catch, total_catch, by=c("iso3c", "year", "scientific_name"))
-# 
-# ##Now calculate the proportion of catch for fishmeal and fishoil
-# fishmeal_catch = fishmeal_catch %>% 
-#   mutate(prop_fishmeal = tonnes_fishmeal/tonnes) %>% 
-#   select(iso3c, year, scientific_name, prop_fishmeal)
-# 
-# ##############Apply proportions to FAO data
-# FAO = left_join(FAO, fishmeal_catch, by=c("iso3c", "year", "scientific_name"))
-# 
-# FAO = FAO %>% 
-#   mutate(prop_fishmeal = if_else(is.na(prop_fishmeal), 1, 1-prop_fishmeal)) %>% 
-#   rename(total_tonnes = tonnes) %>% 
-#   mutate(tonnes = total_tonnes*prop_fishmeal)
-# 
-# #Percent of production in each new category per country and production source
-# countries = unique(FAO$iso3c)
-# genus = unique(FAO$genus_cat)
-# years = unique(FAO$year)
-# 
-# for(k in 1:length(years)){
-#   for(j in 1:length(countries)){
-#     for(i in 1:length(genus)){
-#       x = FAO %>% 
-#         filter(iso3c == countries[j],
-#                genus_cat == genus[i],
-#                year == years[k])
-#       total_tonnes = sum(x$tonnes)
-#       x = x %>% 
-#         mutate(prop_catch = tonnes/total_tonnes)
-#       y = FAO_export %>% 
-#         filter(iso3c == countries[j],
-#                genus_cat == genus[i],
-#                year == years[k])
-#       y = y$tonnes[1]
-#       #print(sau_countries[j])
-#       #print(genus_categories[i])
-#       #print(y)
-#       x = x %>% 
-#         mutate(pred_exp_catch = prop_catch*y)
-#       x$pred_exp_catch[is.na(x$pred_exp_catch)]=0
-#       x = x %>% 
-#         mutate(pred_consumed_catch = tonnes - pred_exp_catch)
-#       if(j==1&i==1&k==1){
-#         total_consump_FAO = x}else{
-#           total_consump_FAO = rbind(total_consump_FAO, x)}
-#     }
-#   }
-# }
-# 
-# ##############Set negatives to zero#############
-# total_consump_FAO = total_consump_FAO %>% 
-#   mutate(pred_consumption = if_else(pred_consumed_catch<0,0,pred_consumed_catch),
-#          negative_values = if_else(pred_consumed_catch<0,pred_consumed_catch,0))
-# 
-# total_consumption_FAO = total_consump_FAO %>%
-#   select(country, iso3c, year, scientific_name, ASFIS_species, Production_source, genus_cat, pred_consumption)
-# ########Add imported fish#############
-# FAO_export = FAO_commod %>% filter(Element=="Food exports")
-# FAO_import = FAO_commod %>% filter(Element=="Food imports")
-# 
-# ##Predict reexport
-# pred_reexport = total_consump_FAO %>% 
-#   group_by(year, iso3c, genus_cat) %>% 
-#   summarize(reexport = sum(negative_values)) 
-# 
-# ##Remove reexport from imports
-# FAO_import = FAO_import %>% 
-#   filter(year %in% years)
-# 
-# FAO_import = left_join(FAO_import, pred_reexport, by=c("year", "iso3c", "genus_cat"))
-# 
-# ##Add imports
-# FAO_pred_import = FAO_import %>% 
-#   mutate(pred_import = tonnes + reexport,
-#          pred_consumption = if_else(pred_import<0,0,pred_import),
-#          scientific_name = "NA",
-#          Production_source = "Imports",
-#          ASFIS_species = "NA") %>%
-#   rename(country=Country) %>% 
-#   drop_na(pred_consumption) %>% 
-#   dplyr::select(country, iso3c, year, scientific_name, ASFIS_species, Production_source, genus_cat, pred_consumption)
-# 
-# total_consumption_FAO = rbind(total_consumption_FAO, FAO_pred_import)
-# 
-# ####Calculate species proportions for each sector (capture and aquaculture)
-# 
-# ##Aquaculture
-# aquac_spp_total_FAO = total_consumption_FAO %>% 
-#   filter(Production_source=="Aquaculture production") %>% 
-#   group_by(iso3c, year) %>% 
-#   summarise(tonnes_total = sum(pred_consumption))
-# 
-# aquac_spp_prop_FAO = total_consumption_FAO %>% 
-#   filter(Production_source=="Aquaculture production") %>% 
-#   group_by(iso3c, year, scientific_name) %>% 
-#   summarise(tonnes = sum(pred_consumption))
-# 
-# aquac_spp_prop_FAO = left_join(aquac_spp_prop_FAO, aquac_spp_total_FAO, by=c("iso3c", "year")) 
-# 
-# aquac_spp_prop_FAO = aquac_spp_prop_FAO %>% 
-#   mutate(spp_prop = tonnes/tonnes_total) %>% 
-#   drop_na(spp_prop) %>% 
-#   filter(spp_prop>0)
-# 
-# ##Capture
-# capture_spp_total_FAO = total_consumption_FAO %>% 
-#   filter(Production_source=="Capture production") %>% 
-#   group_by(iso3c, year) %>% 
-#   summarise(tonnes_total = sum(pred_consumption))
-# 
-# capture_spp_prop_FAO = total_consumption_FAO %>% 
-#   filter(Production_source=="Capture production") %>% 
-#   group_by(iso3c, year, scientific_name) %>% 
-#   summarise(tonnes = sum(pred_consumption))
-# 
-# capture_spp_prop_FAO = left_join(capture_spp_prop_FAO, capture_spp_total_FAO, by=c("iso3c", "year")) 
-# 
-# capture_spp_prop_FAO = capture_spp_prop_FAO %>% 
-#   mutate(spp_prop = tonnes/tonnes_total) %>% 
-#   drop_na(spp_prop) %>% 
-#   filter(spp_prop>0)
-# 
-# 
-# ##Save the results
-# #Aquaculture
-# write.csv(aquac_spp_prop_FAO, "MAR_aquaculture_spp_proportions_2010_2017_FAO.csv", row.names = FALSE)
-# #Capture
-# write.csv(capture_spp_prop_FAO, "MAR_capture_spp_proportions_2010_2017_FAO.csv", row.names = FALSE)
-# 
-# 
-# ##Com
-# 
-# 
-# 
-
-# ##Now, let's apply this to the consumption data 
-# 
-# 
-# 
-# ###Species disaggregation - Capture fisheries
-# 
-# ##Option 1 - use food balance sheets and group averages
-# ##Steps
-# #1) Calculate proportion of capture vs aquaculture in each category
-# #2) Remove predicted aquaculture production in each group (assuming all products are exported  in the same proportion) 
-# #3) Calculate group proportions of total consumption
-# #4) Apply these proportions to estimated consumption 
-# #5) Multiply by the average nutrient composition of each group
-# 
-# ##Considerations
-# #Hard to figure out how much is exported of capture vs aquaculture in each category. 
-# #It might be that all the aquaculture production is being exported
-# #Only problematic for categories with capture and aquaculture production
-# 
-# 
-# ##Calculate proportion of consumption within each group and year
-# prop_genus_cat = FAO_commod %>% 
-#   filter(element == "Total food supply",
-#          year>2009) %>% 
-#   group_by(year, iso3c, genus_cat) %>% 
-#   summarise(tonnes = sum(tonnes))
-# 
-# total_genus_cat = FAO_commod %>% 
-#   filter(element == "Total food supply",
-#          year>2009) %>% 
-#   group_by(year, iso3c) %>% 
-#   summarise(tonnes_total = sum(tonnes))
-# 
-# prop_genus_cat = left_join(prop_genus_cat, total_genus_cat, by=c("year", "iso3c"))
-# 
-# prop_genus_cat = prop_genus_cat %>% 
-#   mutate(prop = tonnes/tonnes_total)
-# 
-# ##Next, calculate proportion of aquaculture vs capture for each group and year
-# prop_genus_cat_source = FAO_prod %>% 
-#   filter(year>2009) %>% 
-#   group_by(year, iso3c, genus_cat, Production_source) %>% 
-#   summarise(tonnes = sum(tonnes)) %>% 
-#   drop_na(genus_cat)
-# 
-# total_genus_cat_source = FAO_prod %>% 
-#   filter(year>2009) %>% 
-#   group_by(year, iso3c, genus_cat) %>% 
-#   summarise(tonnes_total = sum(tonnes))
-# 
-# prop_genus_cat_source = left_join(prop_genus_cat_source, total_genus_cat_source, by=c("year", "iso3c", "genus_cat"))
-# 
-# prop_genus_cat_source = prop_genus_cat_source %>% 
-#   mutate(prop = tonnes/tonnes_total)
-# 
-# 
-# ##Option 3 - use species value
-# ##Steps
-# #1) Calculate fish price quantiles for each country and year
-# #2) Assume that a certain proportion of species are being eported based on their value (high value species going to wealthy countries)
-# #3) Estimate production retained domestically
-# #4) Apply these proportions to estimated consumption 
-# #5) Multiply by the average nutrient composition of each group
-# 
-# ##
-

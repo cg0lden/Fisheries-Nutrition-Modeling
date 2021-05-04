@@ -1,49 +1,49 @@
+##Assign species proportions to GND model output
+
 library(readr)
 library(tidyverse)
 library(countrycode)
 
 #Import datasets
-QPMARBASE <- read_csv("data/QPMARBASE.csv") %>% mutate(scenario = "base", Production_area = "MAR")
-QPMARHIGH <- read_csv("data/QPMARHIGH.csv") %>% mutate(scenario = "high", Production_area = "MAR")
-QPINLHIGH <- read_csv("data/QPINLHIGH.csv") %>% mutate(scenario = "high", Production_area = "INL")
-QPINLBASE <- read_csv("data/QPINLBASE.csv") %>% mutate(scenario = "base", Production_area = "INL")
+QPMARBASE <- read_csv("data/QPMARBASE.csv") %>% mutate(scenario = "base", env = "MAR")
+QPMARHIGH <- read_csv("data/QPMARHIGH.csv") %>% mutate(scenario = "high", env = "MAR")
+QPINLHIGH <- read_csv("data/QPINLHIGH.csv") %>% mutate(scenario = "high", env = "INL")
+QPINLBASE <- read_csv("data/QPINLBASE.csv") %>% mutate(scenario = "base", env = "INL")
 FoodConsumptionBase <- read_csv("data/FoodConsBaseRev2.csv") %>% mutate(scenario = "base")
 FoodConsumptionScenario <- read_csv("data/FoodConsScenRev2.csv") %>% mutate(scenario = "high")
 BaseNutrients <- read_csv("data/NutrientsBaseRev2.csv") %>% mutate(scenario = "base")
 ScenarioNutrients <- read_csv("data/NutrientsScenRev2.csv") %>% mutate(scenario = "high")
-#fw_consump_combined_final <- read_csv("data/fw_consump_combined_final_wmodelcode.csv")
-#MAR_spp_proportions_2010_2014_SAU <- read_csv("data/MAR_spp_proportions_2014_SAU.csv")
-#all_spp_proportions_2014_FAO <- read_csv("data/all_spp_proportions_2014_FAO_fishmeal.csv")
-all_spp_proportions_2014_FAO <- read_csv("data/all_spp_proportions_2014_FAO.csv")
+fw_consump_combined_final <- read_csv("data/consump_fw_all_v2_noHIEScorrection_post.csv")
+MAR_spp_proportions_2010_2014_FAO <- read_csv("data/MAR_spp_proportions_2014_FAO.csv")
 iso_group <- read_csv("data/iso_group.csv") %>% filter(!group=="EUN")
 iso_group_EUN <- read_csv("data/iso_group.csv")
 FAO_prod_spp <- read_csv("data/FAO_prod_spp.csv") %>% 
   mutate(ASFIS_species = tolower(ASFIS_species))
 
 ##Nutrients
-mar_fw_spp_nutrients <- read_csv("data/mar_fw_spp_nutrients_FAO.csv") %>% 
+mar_fw_spp_nutrients <- read_csv("data/mar_fw_spp_nutrients_FAO_fw_v2.csv") %>% 
   group_by(common_name, nutrient) %>% 
   summarise(value = mean(value)) %>% 
   ungroup() %>% 
   drop_na(common_name)
 
-mar_fw_spp_nutrients_categories <- read_csv("data/mar_fw_spp_nutrients_FAO.csv") %>% 
+mar_fw_spp_nutrients_categories <- read_csv("data/mar_fw_spp_nutrients_FAO_fw_v2.csv") %>% 
   dplyr::select(common_name, nutrient, category, value) %>% 
   group_by(category, nutrient) %>% 
   summarise(value = mean(value)) %>% 
-  ungroup() %>% 
   drop_na(category)
 
-mar_fw_spp_nutrients_broad_categories <- read_csv("data/mar_fw_spp_nutrients_FAO.csv") %>% 
+mar_fw_spp_nutrients_broad_categories <- read_csv("data/mar_fw_spp_nutrients_FAO_fw_v2.csv") %>% 
   dplyr::select(common_name, nutrient, broad_category, value) %>%
-  drop_na(broad_category) %>% 
+  mutate(broad_category = recode(broad_category, 
+                                 "freshwater" = "INL",
+                                 "Inland waters" = "INL",
+                                 "Marine areas" = "MAR")) %>% 
   group_by(broad_category, nutrient) %>% 
   summarise(value = mean(value)) %>% 
   ungroup() %>% 
-  drop_na(broad_category) %>% 
-  mutate(broad_category = recode(broad_category, 
-                                 "Inland waters" = "INL",
-                                 "Marine areas" = "MAR"))
+  drop_na(broad_category)
+
 
 ##FH stands for total, 
 ##MLC: molluscs, 
@@ -66,7 +66,7 @@ mar_fw_spp_nutrients_broad_categories <- read_csv("data/mar_fw_spp_nutrients_FAO
 QP_all = rbind(QPMARBASE, QPMARHIGH, QPINLBASE, QPINLHIGH) %>% 
   separate(OUTPUT, c("iso3c", "group", "unit"), "_",remove=F)
 
-QP_all = reshape2::melt(QP_all, id.vars = c(names(QP_all)[1:7], "scenario", "Production_area")) %>% 
+QP_all = reshape2::melt(QP_all, id.vars = c(names(QP_all)[1:7], "scenario", "env")) %>% 
   rename("year" = "variable")
 
 QP_all = left_join(QP_all, iso_group, by=c("iso3c" = "group")) %>% 
@@ -79,18 +79,18 @@ QP_countries = as.data.frame(unique(QP_all$iso3c))
 ##Remove FHA when duplicated
 QP_capture = QP_all %>% 
   filter(group %in% "FHC") %>% 
-  select(iso3c, year, Production_area, scenario, group, value)
+  select(iso3c, year, env, scenario, group, value)
 
 QP_aquac_spp = QP_all %>% 
   filter(!group %in% c("FHC", "FHA")) %>% 
-  group_by(iso3c, year, Production_area, scenario) %>% 
+  group_by(iso3c, year, env, scenario) %>% 
   summarize(value_spp = sum(value)) 
 
 QP_aquac = QP_all %>% 
   filter(!group %in% "FHC",
          group %in% "FHA") %>% 
-  select(iso3c, year, Production_area, scenario, value) %>% 
-  left_join(QP_aquac_spp, by=c("iso3c", "year", "Production_area", "scenario")) %>% 
+  select(iso3c, year, env, scenario, value) %>% 
+  left_join(QP_aquac_spp, by=c("iso3c", "year", "env", "scenario")) %>% 
   mutate(value_spp = if_else(is.na(value_spp), 0, value_spp),
          delta = value-value_spp) %>% 
   filter(delta>0.1) %>% 
@@ -100,7 +100,7 @@ QP_aquac = QP_all %>%
 
 QP_all_spp = QP_all %>% 
   filter(!group %in% c("FHC", "FHA")) %>% 
-  select(iso3c, year, Production_area, scenario, group, value) %>% 
+  select(iso3c, year, env, scenario, group, value) %>% 
   rbind(QP_capture, QP_aquac)
 
 ##Calculate proportions of each group/country
@@ -110,7 +110,7 @@ QP_all_total = QP_all_spp %>%
   ungroup()
 
 QP_prop = QP_all_spp %>%
-  group_by(iso3c, year, group, scenario, Production_area) %>% 
+  group_by(iso3c, year, group, scenario, env) %>% 
   summarise(value = sum(value)) %>% 
   ungroup()
 
@@ -210,13 +210,6 @@ mutate(year = gsub("A", "", year))
 FC_ASF = FC_all %>% 
   filter(products %in% c("Beef and Veal", "Fish", "Pork", "Poultry", "Sheep"))
 
-##Plot fish consumption by year
-# ggplot(data = FC_ASF) +
-#   geom_point(aes(x=year, y=value)) +
-#   facet_wrap(~products, scales = "free")+
-#   theme_classic()+
-#   ylab("Consumption (kg/person/day)")
-
 ##Plot total for all countries
 FC_ASF_total = FC_all %>% 
   filter(products %in% c("Beef and Veal", "Fish", "Pork", "Poultry", "Sheep")) %>% 
@@ -224,41 +217,72 @@ FC_ASF_total = FC_all %>%
   summarise(value = mean(value))
 
 FC_ASF_total$year = as.numeric(FC_ASF_total$year)
-# ggplot(data = FC_ASF_total) +
-#   geom_line(aes(x=year, y=value, linetype=scenario)) +
-#   facet_wrap(~products, scales = "free")+
-#   theme_classic()+
-#   ylab("Average Consumption (kg/person/day)")
+
+##Clean freshwater disaggregation data
+fw_dis = fw_consump_combined_final %>% 
+  rename("iso3c" = "country_code",
+         "common_name" = "common_name_simple",
+         "production_sector" = "source",
+         "tonnes" = "consumption_tons_mid",
+         "scientific_name" = "sci_name") %>% 
+  mutate(env = "INL",
+         genus_cat = "Freshwater fish",
+         Production_area = "Inland waters",
+         production_sector = recode(production_sector, 
+                                    "Aquaculture (freshwater)" = "FHA",
+                                    "Aquaculture (brackishwater)" = "FHA",
+                                    "Capture production" = "FHC",
+                                    "Import" = "FHA",
+                                    "Recreational" = "FHC",
+                                    "Freshwater (assumed capture)" = "FHC",
+                                    "Freshwater (aquaculture)" = "FHA",
+                                    "Recreational" = "FHC")) %>% 
+  left_join(iso_group_EUN, by="iso3c") %>% 
+  dplyr::select(iso3c, year, genus_cat, scientific_name, common_name, production_sector, 
+                env, tonnes, group)
+
+fw_dis_capture = fw_dis %>% 
+  filter(production_sector=="FHC")
+
+fw_dis_aquac = fw_dis %>% 
+  filter(production_sector=="FHA")
 
 #Clean marine disaggregation
-all_dis_import_capture = all_spp_proportions_2014_FAO %>% 
+mar_dis_import_capture = MAR_spp_proportions_2010_2014_FAO %>% 
   mutate(scientific_name = tolower(scientific_name),
          Genus = tolower(Genus)) %>% 
   filter(production_sector=="import",
-         !Production_area == "Inland waters",
          !Genus %in% c("mytilus", "perna", "crassostrea", "litopenaeus", "penaeus", "metapenaeus", "salmo")) %>% 
   mutate(production_sector = "FHC")
 
-all_dis_capture = all_spp_proportions_2014_FAO %>% 
-  filter(!production_sector=="import",
-         !production_sector=="Aquaculture production") %>% 
-  rbind(all_dis_import_capture) %>% 
+mar_dis_import_aquac = MAR_spp_proportions_2010_2014_FAO %>%
+  mutate(scientific_name = tolower(scientific_name),
+         Genus = tolower(Genus)) %>% 
+  filter(production_sector=="import",
+         Genus %in% c("mytilus", "perna", "crassostrea", "litopenaeus", "penaeus", "metapenaeus", "salmo")) %>% 
+  mutate(production_sector = "FHA")
+
+mar_dis_capture = MAR_spp_proportions_2010_2014_FAO %>% 
+  filter(production_sector=="Capture production") %>% 
+  rbind(mar_dis_import_capture) %>% 
   mutate(production_sector="FHC",
-         common_name = tolower(common_name)) %>% 
-  left_join(iso_group_EUN, by="iso3c")
+         common_name = tolower(common_name), 
+         env="MAR") %>% 
+  left_join(iso_group_EUN, by="iso3c") %>% 
+  select(-Genus, -Family, -Order, -spp_prop, -Production_area)
 
-all_dis_aquac = all_spp_proportions_2014_FAO %>% 
-  filter(!production_sector=="import",
-         production_sector=="Aquaculture production") %>% 
-  rbind(all_dis_import_capture) %>% 
+mar_dis_aquac = MAR_spp_proportions_2010_2014_FAO %>% 
+  filter(production_sector=="Aquaculture production") %>% 
+  rbind(mar_dis_import_aquac) %>% 
   mutate(production_sector="FHA",
-         common_name = tolower(common_name)) %>% 
-  left_join(iso_group_EUN, by="iso3c")
+         common_name = tolower(common_name), 
+         env="MAR") %>% 
+  left_join(iso_group_EUN, by="iso3c") %>% 
+  select(-Genus, -Family, -Order, -spp_prop, -Production_area)
 
-all_dis = rbind(all_dis_aquac, all_dis_capture) %>%
-  mutate(common_name = tolower(common_name),
-         Production_area = recode(Production_area, "Inland waters" = "INL",
-                                           "Marine areas" = "MAR"))
+all_dis = rbind(mar_dis_capture, fw_dis_capture,
+                        mar_dis_aquac, fw_dis_aquac) %>% 
+  mutate(common_name = tolower(common_name))
 
 all_dis_EUN = all_dis %>%
   filter(group=="EUN")
@@ -268,14 +292,14 @@ all_dis = all_dis %>%
 
 ##Calculate species proportions
 spp_total = all_dis %>%
-  group_by(iso3c, production_sector, Production_area) %>% 
+  group_by(iso3c, production_sector, env) %>% 
   summarise(tonnes_total = sum(tonnes))
 
 spp_prop = all_dis %>%  
-  group_by(iso3c, production_sector, common_name, Production_area) %>% 
+  group_by(iso3c, production_sector, common_name, env) %>% 
   summarise(tonnes = sum(tonnes))
 
-spp_prop = left_join(spp_prop, spp_total, by=c("iso3c", "production_sector", "Production_area")) 
+spp_prop = left_join(spp_prop, spp_total, by=c("iso3c", "production_sector", "env")) 
 
 spp_prop = spp_prop %>% 
   mutate(spp_prop = tonnes/tonnes_total) %>% 
@@ -285,14 +309,14 @@ spp_prop = spp_prop %>%
 
 ##Calculate species proportions - EUN
 spp_total_EUN = all_dis_EUN %>%
-  group_by(group, production_sector, Production_area) %>% 
+  group_by(group, production_sector, env) %>% 
   summarise(tonnes_total = sum(tonnes))
 
 spp_prop_EUN = all_dis_EUN %>%  
-  group_by(group, production_sector, common_name, Production_area) %>% 
+  group_by(group, production_sector, common_name, env) %>% 
   summarise(tonnes = sum(tonnes))
 
-spp_prop_EUN = left_join(spp_prop_EUN, spp_total_EUN, by=c("group", "production_sector", "Production_area")) 
+spp_prop_EUN = left_join(spp_prop_EUN, spp_total_EUN, by=c("group", "production_sector", "env")) 
 
 spp_prop_EUN = spp_prop_EUN %>% 
   mutate(spp_prop = tonnes/tonnes_total) %>% 
@@ -305,39 +329,17 @@ spp_prop_EUN = spp_prop_EUN %>%
 spp_prop = rbind(spp_prop, spp_prop_EUN)
 
 ###################################All years
-# ##Allocate species to model output
-# FC_fish = FC_all %>% 
-#   filter(products == "Fish")
-# 
-# #Calculate total aquatic, total freshwater and total marine consumption in kg/cap/year by country
-# FC_total = FC_all %>%
-#   filter(products == "Fish") %>%
-#   select(iso3c, year, scenario, value)
-# 
-# FC_aquatic = left_join(FC_fish, QP_prop, by=c("iso3c", "year", "scenario")) %>%
-#   drop_na(QP_prop) %>%
-#   mutate(value2 = value*QP_prop) %>%
-#   group_by(iso3c, year, Production_area, units, scenario) %>%
-#   summarise(pred_consumption = sum(value2)) %>%
-#   spread(key = Production_area, value=pred_consumption) %>%
-#   mutate(MAR = if_else(is.na(MAR), 0, MAR),
-#          total = INL + MAR) %>% 
-#   filter(year==2015,
-#          scenario=="base")
-
-#write.csv(FC_aquatic, "GND_ASF_consumption_2015_base.csv", row.names = F)
-
-
 FC_fish = FC_all %>% 
-  filter(products == "Fish")
+  filter(products == "Fish") %>% 
+  rename(consumption = value)
 
 FC_fish = left_join(FC_fish, QP_prop, by=c("iso3c", "year", "scenario")) %>% 
   drop_na(QP_prop) %>% 
-  left_join(spp_prop, by=c("iso3c", "group" = "production_sector", "Production_area")) %>% 
-  mutate(value2 = value*QP_prop,
+  left_join(spp_prop, by=c("iso3c", "group" = "production_sector", "env")) %>% 
+  mutate(value2 = consumption*QP_prop,
          value3 = value2*spp_prop,
          pred_consump = if_else(is.na(value3), value2, value3)) %>% 
-  select(-value, -value2, -value3)
+  select(-value2, -value3)
 
 FC_fish = left_join(FC_fish, mar_fw_spp_nutrients, by="common_name") %>% 
   mutate(nutrient_supply_dis = pred_consump*value*10/365) 
@@ -357,10 +359,12 @@ FC_fish_cat = missing_na_cat %>%
 missing_na = missing_na_cat %>% 
   filter(is.na(value)) %>% 
   select(-nutrient, -value, -nutrient_supply_dis) %>% 
-  left_join(mar_fw_spp_nutrients_broad_categories, by=c("Production_area" = "broad_category")) %>%
+  left_join(mar_fw_spp_nutrients_broad_categories, by=c("env" = "broad_category")) %>%
   mutate(nutrient_supply_dis = pred_consump*value*10/365) 
 
-FC_fish = rbind(FC_fish_name, FC_fish_cat, missing_na) %>%
+FC_fish = rbind(FC_fish_name, FC_fish_cat, missing_na) 
+
+FC_fish = FC_fish %>%
   group_by(iso3c, year, scenario, nutrient) %>% 
   summarise(nutrient_supply_dis = sum(nutrient_supply_dis, na.rm=T)) %>% 
   drop_na(nutrient)
@@ -378,22 +382,11 @@ Nutrients_2030 = Nutrients_fish %>%
   filter(year==2030,
          nutrient_supply_dis>0)
   
-
-ggplot(data = Nutrients_2030) +
-  geom_point(aes(x=nutrient_supply, y=nutrient_supply_dis)) +
-  facet_wrap(~nutrient, scales = "free") +
-  geom_abline(intercept = 0, slope = 1) +
-  ylab("Nutrient supply - disaggregation")+
-  xlab("Nutrient supply - model") +
-  theme_classic()+
-  labs(title = 2030)
-
 NutrientsScen_long_other = NutrientsScen_long %>% 
   filter(!products=="Fish") %>% 
   rename("nutrient_supply" = "value") %>% 
   dplyr::select(iso3c, year, units, products, scenario, nutrient, nutrient_supply) %>% 
   mutate(nutrient_supply_dis = "NA")
-
 
 NutrientsScen_long_dis = rbind(NutrientsScen_long_other, Nutrients_fish) 
 NutrientsScen_long_dis$nutrient_supply_dis = as.double(NutrientsScen_long_dis$nutrient_supply_dis)
@@ -406,143 +399,10 @@ NutrientsScen_long_dis_short = NutrientsScen_long_dis %>%
   summarise(nutrient_supply_dis = sum(nutrient_supply_dis, na.rm = TRUE),
             nutrient_supply = sum(nutrient_supply, na.rm = TRUE))
 
+NutrientsScen_long_dis_short_2030 = NutrientsScen_long_dis_short %>% 
+  filter(year==2030)
 
-write.csv(NutrientsScen_long_dis, "Disaggregated_NutrientScen_FAO.csv", row.names = F)
+write.csv(NutrientsScen_long_dis, "Disaggregated_NutrientScen_FAO_FW.csv", row.names = F)
 
-write.csv(NutrientsScen_long_dis_short, "Disaggregated_NutrientScen_grouped_FAO.csv", row.names = F)
-
-
-
-
-#################################################################################
-##Calculate proportion of aquatic foods for each country in 2017
-NutrientsScen_long_terrestrial = NutrientsScen_long_dis %>% 
-  filter(year=="2017",
-         !products == "Fish",
-         scenario=="base") %>% 
-  group_by(iso3c, nutrient) %>% 
-  summarise(total_terrestrial = sum(nutrient_supply),
-            total_terrestrial_disaggregated = sum(nutrient_supply_dis))
-
-NutrientsScen_long_fish = NutrientsScen_long_dis %>% 
-  filter(year=="2017",
-         products == "Fish",
-         scenario=="base") %>% 
-  group_by(iso3c, nutrient) %>% 
-  summarise(total_aquatic = sum(nutrient_supply),
-            total_aquatic_disaggregated = sum(nutrient_supply_dis))
-
-NutrientsScen_long_all = left_join(NutrientsScen_long_terrestrial, NutrientsScen_long_fish, by=c("iso3c", "nutrient")) %>% 
-  drop_na() %>% 
-  mutate(total = total_aquatic + total_terrestrial,
-         prop_terrestrial = total_terrestrial/total,
-         prop_aquatic = total_aquatic/total,
-         total_disaggregated = total_aquatic_disaggregated + total_terrestrial_disaggregated,
-         prop_terrestrial_disaggregated = total_terrestrial_disaggregated/total_disaggregated,
-         prop_aquatic_disaggregated = total_aquatic_disaggregated/total_disaggregated) %>% 
-  select(iso3c, nutrient, total_terrestrial, total_aquatic, 
-          total, prop_terrestrial, prop_aquatic, total_terrestrial_disaggregated, total_aquatic_disaggregated, 
-         total_disaggregated, prop_terrestrial_disaggregated, prop_aquatic_disaggregated)
-
-write.csv(NutrientsScen_long_all, "seafood_nutrient_supply_GND.csv", row.names = F)
-
-################################Example for 2014
-##Allocate species to model output
-FC_fish_2014 = FC_all %>% 
-  filter(products == "Fish") %>% 
-  filter(year == "2014",
-         scenario=="base") 
-
-##Join databases
-FC_fish_2014 = left_join(FC_fish_2014, spp_prop, by=c("iso3c")) %>% 
-  mutate(pred_consump = value*spp_prop) %>% 
-  rename("fish_kg_person" = "value") %>% 
-  dplyr::select(countries, units, iso3c, scenario, common_name, production_sector, Production_area, fish_kg_person, spp_prop, pred_consump)
-
-
-FC_fish_2014 = left_join(FC_fish_2014, mar_fw_spp_nutrients, by="common_name") %>% 
-  mutate(nutrient_supply_dis = pred_consump*value*10/365) %>%
-  group_by(iso3c, nutrient) %>% 
-  summarise(nutrient_supply_dis = sum(nutrient_supply_dis))
-
-##Subset model output
-NutrientsScen_long_2014 = NutrientsScen_long %>% 
-  filter(year=="2014",
-         scenario=="base",
-         products=="Fish") %>% 
-  select(iso3c, nutrient, value) %>% 
-  rename("nutrient_supply" = "value")
-
-##jOIN DATABASES
-Nutrients_all = left_join(NutrientsScen_long_2014, FC_fish_2014, by=c("iso3c", "nutrient")) %>% 
-  filter(nutrient_supply_dis>0) %>% 
-  mutate(nutrient_supply_diff = nutrient_supply_dis-nutrient_supply)
-
-ggplot(data = Nutrients_all) +
-  geom_point(aes(x=nutrient_supply, y=nutrient_supply_dis)) +
-  facet_wrap(~nutrient, scales = "free") +
-  geom_abline(intercept = 0, slope = 1) +
-  ylab("Nutrient supply - disaggregation")+
-  xlab("Nutrient supply - model") +
-  theme_classic()
-
-##Map differences
-Nutrients_diff = Nutrients_all %>% 
-  dplyr::select(iso3c, nutrient, nutrient_supply_diff)
-
-# World polygons from the maps package
-# World
-# world <- rnaturalearth::ne_countries(scale="small", returnclass = "sf")
-
-# Plot data (all)
-################################################################################
-
-# # Add expanded data to SF
-# data_all_sf <- world %>% 
-#   left_join(Nutrients_diff, by=c("gu_a3"="iso3c"))
-
-
-
-# # Plot data
-# g <- ggplot(data_all_sf) +
-#   facet_wrap(~ nutrient) +
-#   geom_sf(mapping=aes(fill=nutrient_supply_diff), lwd=0.1, color="grey30") +
-#   # Legend
-#   scale_fill_gradient2(name="% difference in 2030\nmodel output vs disaggregated values", midpoint=0, low="darkred", high="navy", mid="white", na.value = "grey80") +
-#   guides(fill = guide_colorbar(ticks.colour = "black", frame.colour = "black")) +
-#   # Crop out Antarctica
-#   coord_sf(y=c(-55, NA)) +
-#   # Theme
-#   theme_bw() +
-#   theme(legend.position = "bottom",
-#         axis.text=element_blank(),
-#         axis.title=element_blank(),
-#         legend.text=element_text(size=6),
-#         legend.title=element_text(size=8),
-#         strip.text=element_text(size=6),
-#         plot.title=element_text(size=8),
-#         panel.grid.major = element_blank(), 
-#         panel.grid.minor = element_blank(),
-#         panel.background = element_blank(), 
-#         axis.line = element_line(colour = "black"))
-# g
-# 
-# # Export plot
-# ggsave(g, filename=file.path(plotdir, "figure_perc_food_diff_all.pdf"), 
-#        width=8.5, height=11, units="in", dpi=600)
-
-
-#############Plotting
-NutrientsScen_long_2030 = NutrientsScen_long %>% 
-  filter(nutrient=="Calcium",
-         iso3c=="CHN")
-NutrientsScen_long_2030$year=as.character(NutrientsScen_long_2030$year)
-NutrientsScen_long_2030$year=as.numeric(NutrientsScen_long_2030$year)
-
-ggplot(data=NutrientsScen_long_2030, aes(x=year, y=value, colour = scenario)) +
-  geom_line()+
-  #geom_smooth()+
-  facet_wrap(~products, scales = "free") +
-  theme_classic()+
-  labs(title="China, Calcium")
+write.csv(NutrientsScen_long_dis_short, "Disaggregated_NutrientScen_grouped_FAO_fw.csv", row.names = F)
   
